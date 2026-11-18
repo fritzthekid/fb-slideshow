@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Scene "140" (issue #11) on the SPI display, standalone (not part of the
+"""Scene (issue #11) on the SPI display, standalone (not part of the
 slideshow; stop the show first, e.g. with "make scene").
 
-A tiny "140" (5 pt, Ubuntu Bold) appears at the clock's height, its left edge
+A tiny text (--text, default "XXX"; 5 pt, Ubuntu Bold) appears at the clock's height, its left edge
 at a third of the width. It rises in an arc (up first, then right) into the
-middle, growing until its digits are half the screen high, its color warming
+middle, growing until its letters are half the screen high (a long text
+less, so it fits the width), its color warming
 from white over yellow and orange to red. In the middle it bursts into
 fragments that fly over the whole screen and fade out.
 
@@ -16,6 +17,7 @@ missing; --background FILE or none).
     python3 scene140.py --repeat 0          # loop until stopped (Ctrl+C)
     python3 scene140.py --preview 140.gif   # render to a GIF instead (no display)
     python3 scene140.py --color 30,180,10 --starting 70,10
+    python3 scene140.py --text 140
 
 Variable (issue #17): --color is the final color (white blends into it on the
 way, default the red), --starting the start as percent of the screen (left
@@ -43,7 +45,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 HERE = pathlib.Path(__file__).resolve().parent
 FONT = HERE / "fonts" / "Ubuntu.ttf"
-TEXT = "140"
+TEXT = "XXX"         # default text of the scene (--text)
+MAX_TEXT = 40
 
 if "fbs" in sys.modules:  # already loaded (by sequence.py): share it
     fbs = sys.modules["fbs"]
@@ -53,7 +56,8 @@ else:
     _spec.loader.exec_module(fbs)
 
 START_PT = 5.0      # font size at the start
-END_HEIGHT = 0.5    # digit height in the middle, as part of the screen height
+END_HEIGHT = 0.5    # letter height in the middle, as part of the screen height
+END_WIDTH = 0.92    # a long text: at most this part of the screen width
 DEFAULT_BACKGROUND = "/mnt/stick/background/scene-background.jpg"
 FRAGMENT = 6        # fragment size in px (at the number's full size)
 
@@ -148,10 +152,11 @@ def load_background(path, size):
 class Scene:
     def __init__(self, size, travel=6.0, pause=0.6, explode=3.0, seed=None,
                  diagonal_in=fbs.DISPLAY_DIAGONAL_IN, font=FONT, background=None,
-                 color=None, start=None):
+                 color=None, start=None, text=TEXT):
         """color: final RGB (None: the warm ramp to red). start: (x, y) in
         percent of the screen, left edge of the number from the left and its
-        bottom from the bottom (None: a third of the width, clock height)."""
+        bottom from the bottom (None: a third of the width, clock height).
+        text: what flies (a long one ends smaller, to fit the width)."""
         self.size = W, H = size
         self.ramp = make_ramp(color)
         self.glow = (np.array(GLOW, np.float32) if color is None else
@@ -161,12 +166,19 @@ class Scene:
         self.travel, self.pause, self.explode = travel, pause, explode
         self.total = travel + pause + explode
         px_cm = math.hypot(W, H) / (diagonal_in * 2.54)
+        self.text = text
         self.end_h = END_HEIGHT * H
-        self.master = render_master(round(self.end_h), font)
+        self.master = render_master(round(self.end_h), font, text)
+        for _ in range(4):  # too wide: smaller in the middle (hinting: not linear)
+            width = self.master.shape[1]
+            if width <= END_WIDTH * W:
+                break
+            self.end_h *= END_WIDTH * W / width
+            self.master = render_master(round(self.end_h), font, text)
         self.aspect = aspect = self.master.shape[1] / self.master.shape[0]
-        # 5 pt font size -> digit height (digits are ~0.7 em in Ubuntu)
+        # 5 pt font size -> letter height (digits are ~0.7 em in Ubuntu)
         em = START_PT / 72 * 2.54 * px_cm
-        self.start_h = em * digit_height_per_em(font)
+        self.start_h = min(em * digit_height_per_em(font, text), self.end_h)
         if start is None:  # left edge at W/3, bottom at the clock's baseline
             left, bottom = W / 3, H - round(fbs.CLOCK_MARGIN_CM * px_cm)
         else:
@@ -403,6 +415,14 @@ def parse_starting(text):
     return tuple(vals)
 
 
+def parse_text(text):
+    text = str(text).strip()
+    if not text or len(text) > MAX_TEXT or "\n" in text:
+        raise argparse.ArgumentTypeError(
+            f"text: 1..{MAX_TEXT} characters on one line, got {text!r}")
+    return text
+
+
 def parse_args(argv):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--fb", default=os.environ.get("FB_DEVICE", fbs.DEFAULT_FB))
@@ -414,6 +434,8 @@ def parse_args(argv):
                     help="seconds for the burst (default 3)")
     ap.add_argument("--repeat", type=int, default=1,
                     help="times to play; 0 = loop until stopped")
+    ap.add_argument("--text", type=parse_text, default=TEXT,
+                    help=f"the text that flies (default {TEXT})")
     ap.add_argument("--seed", type=int, help="random seed of the fragments")
     ap.add_argument("--color", type=parse_color,
                     help="final color R,G,B, e.g. 30,180,10 (default: warm ramp to red)")
@@ -446,7 +468,7 @@ def main(argv=None):
         size = a.size or (480, 320)
         scene = Scene(size, a.travel, a.pause, a.explode, a.seed,
                       background=load_background(a.background, size),
-                      color=a.color, start=a.starting)
+                      color=a.color, start=a.starting, text=a.text)
         n = preview(scene, a.preview, a.fps)
         print(f"{a.preview}: {n} frames, {scene.total:.1f} s")
         return 0
@@ -465,12 +487,12 @@ def main(argv=None):
     size = (info.width, info.height)
     scene = Scene(size, a.travel, a.pause, a.explode, a.seed,
                   background=load_background(a.background, size),
-                  color=a.color, start=a.starting)
+                  color=a.color, start=a.starting, text=a.text)
     try:
         for _ in itertools.count() if a.repeat == 0 else range(a.repeat):
             t0 = time.monotonic()
             n = play(display, scene)
-            fbs.log(f"scene 140: {n} frames in {time.monotonic() - t0:.1f} s")
+            fbs.log(f"scene {a.text}: {n} frames in {time.monotonic() - t0:.1f} s")
     except (KeyboardInterrupt, SystemExit):
         pass
     finally:

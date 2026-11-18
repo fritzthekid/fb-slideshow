@@ -189,7 +189,7 @@ def render(config_text, write, base_argv=(), stick=HERE, fps=25, size=(480, 320)
     """Plays the config into write(frame). Returns (frames, seconds)."""
     cfg = seq.parse_config(config_text, list(base_argv))
     cfg = finite(local_paths(cfg, stick), forever_s, log)
-    base = fbs.parse_args(list(base_argv), env={})
+    base = fbs.parse_args([*base_argv, *cfg.show_argv], env={})  # + show_args
     rng = random.Random(seed)
     clock = None
 

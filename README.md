@@ -101,6 +101,8 @@ On hydra the service always starts the show with
 `ci/fb-slideshow.service`, changed by editing that file and `make deploy`).
 Options saved with `make config` come after them, so they add to these
 defaults and win where they set the same option (e.g. `--transitions cut`).
+Simpler: put them into `config.yaml` on the stick as `show_args` (see
+[Sequence](#sequence-configyaml)); those win over both.
 The program's own defaults in the table above apply when it is started by hand.
 
 To repeat a run exactly, take the seed from the start line in the log
@@ -162,24 +164,26 @@ At each new minute only the clock's rows are rewritten, so the SPI bus sends
 about a quarter of a frame. Switch it off with `--no-clock`, e.g.
 `make config SHOW_ARGS="--no-clock"`.
 
-## Scene "140"
+## Scene
 
-A standalone scene (`scene140.py`, issue #11), not part of the slideshow
-yet (in a sequence: see below). A tiny "140" (5 pt, Ubuntu Bold) appears at the clock's height, its
-left edge at a third of the width. It rises in an arc (up first, then right)
-into the middle, growing until its digits are half the screen high, its color
+A scene (`scene140.py`, issue #11), standalone or as a step of a sequence
+(see below). A tiny text (`--text`, default `XXX`; 5 pt, Ubuntu Bold)
+appears at the clock's height, its left edge at a third of the width. It
+rises in an arc (up first, then right) into the middle, growing until its
+letters are half the screen high (a long text less, so that it fits the
+width), its color
 warming from white over yellow and orange to red. In the middle it bursts
 into fragments that fly over the whole screen and fade out, so the picture
 behind shows through again. About 10 s.
 
 Background: the picture `/mnt/stick/background/scene-background.jpg`
 (fills the screen, cropped), black if it is missing. A soft dark rim keeps
-the number readable on bright pictures. Another picture:
+the text readable on bright pictures. Another picture:
 `--background FILE`, black: `--background none`.
 
 ```bash
 make scene                          # stops the show, plays the scene on hydra
-make scene SCENE_ARGS="--repeat 3 --travel 8"
+make scene SCENE_ARGS="--repeat 3 --travel 8 --text 140"
 make scene SCENE_ARGS="--repeat 0"  # loop until Ctrl+C
 make start                          # the show again
 make scene-preview                  # scene140.gif on itaka, to look at on a PC
@@ -188,6 +192,7 @@ make scene-preview SCENE_ARGS="--background background/scene-background.jpg"
 
 | Option | Default | Meaning |
 |---|---|---|
+| `--text T` | `XXX` | the text that flies, 1..40 characters (e.g. `140`) |
 | `--travel S` | 6 | seconds for the arc into the middle |
 | `--pause S` | 0.6 | seconds in the middle before the burst |
 | `--explode S` | 3 | seconds for the burst |
@@ -217,8 +222,13 @@ that file hydra shows the plain slideshow, as before. Example
 
 ```yaml
 loop: true            # after the last step start again (false: play once)
+show_args:            # options of fb-slideshow.py for the whole show
+  transitions: stack
+  duration: 3
+  easing: ease-out
 sequence:
   - scene:
+      text: "140"
       repeat: 3
       travel: 8
   - slideshow:
@@ -228,9 +238,29 @@ sequence:
       transitions: stack
 ```
 
+- `show_args` (issue #31): the options of `fb-slideshow.py` for the whole
+  show, the same as on the command line; `--transitions cut` in the
+  service's `DEFAULT_ARGS` and `transitions: cut` here have the same effect.
+  They win over `DEFAULT_ARGS` and `make config`. Three ways to write them:
+
+  ```yaml
+  show_args:                      # name: value lines
+    transitions: stack
+    shuffle: true
+  show_args:                      # a list, as in issue #31
+    - transitions stack
+    - duration: 3
+    - shuffle
+  show_args: --transitions stack --shuffle   # one line as on the command line
+  ```
+
+  Display options (`clock`, `gamma`, `limit`, `size`, `diagonal`, ...) can be
+  set here too. They are used when the display is opened, so when they
+  change, the show exits and systemd starts it again (a few seconds of
+  black).
 - Steps: `slideshow` (options of `fb-slideshow.py`: `minutes`, `hold`,
   `shuffle`, `transitions`, `duration`, `easing`, `fill`, `clock`, `pile`, `pile_turn`,
-  `directory`) and `scene` (options of `scene140.py`: `repeat`, `travel`,
+  `directory`) and `scene` (options of `scene140.py`: `text`, `repeat`, `travel`,
   `pause`, `explode`, `background`, `seed`, `color`, `starting`, `timing`).
   A step without options: `- scene`.
 - Scenes right after each other play as one block over one background, the
@@ -252,8 +282,9 @@ sequence:
         minutes: 10
   ```
 - A step's options apply to that step only; options it does not set come
-  from the service (`DEFAULT_ARGS` and `make config`). Display options
-  (`gamma`, `limit`, `size`, ...) are not set per step but with `make config`.
+  from `show_args` and the service (`DEFAULT_ARGS`, `make config`). Display
+  options (`gamma`, `limit`, `size`, ...) are not set per step but in
+  `show_args`.
 - The pictures continue where the previous slideshow step stopped. There is
   no clock over a scene.
 - The file is checked while the show runs: a change takes effect after the
@@ -308,7 +339,8 @@ make movie CONFIG=other.yaml MOVIE=other.mp4 MOVIE_ARGS="--smooth --seed 3"
   repo directory (`/mnt/stick/...` is mapped there; `--stick DIR` for
   another copy of the stick).
 - The options are the service defaults (`DEFAULT_ARGS`) plus `SHOW_ARGS`,
-  which are not read from hydra: pass the ones set with `make config`.
+  which are not read from hydra: pass the ones set with `make config`. The
+  `show_args` in the config file apply as on hydra.
 - One round of the sequence (`--rounds N`); a step that never ends is cut
   after a minute (`--forever-minutes`). The clock starts at the current time
   (`--start HH:MM`) and is always shown in slideshow steps.
@@ -452,7 +484,7 @@ used; `make deploy HYDRA=<address>` forces one.
 | `make status` | state, boot setting, options, recent log |
 | `make config SHOW_ARGS="--shuffle --hold 20"` | set the show's options on top of the service defaults, replacing the previously saved ones (kept across reboots and deploys; `SHOW_ARGS=` goes back to the service defaults). Invalid options are rejected and nothing changes |
 | `make sequence` | upload the local `config.yaml` (`CONFIG=` another file), check it on hydra and make it the sequence, replacing `/mnt/stick/config.yaml`; see [Sequence](#sequence-configyaml) |
-| `make scene` / `make scene-preview` | play the "140" scene on hydra (the show stays stopped) / render it to a GIF |
+| `make scene` / `make scene-preview` | play the scene on hydra (the show stays stopped) / render it to a GIF |
 | `make diashow-setup` / `make diashow-sync` | set up the picture sync from Nextcloud (asks for the app password on hydra) / fetch now, see [Pictures from Nextcloud](#pictures-from-nextcloud) |
 | `make movie` | the sequence of `config.yaml` as a movie (`config.mp4`), offline, see [Movie of a sequence](#movie-of-a-sequence) |
 | `make measure-fps` | frame rate of transitions on the real panel (stops the show meanwhile) |

@@ -6,15 +6,23 @@
 # are the ones of fb-slideshow.py / scene140.py (see README), e.g.
 #   slideshow: minutes, hold, shuffle, transitions, duration, easing,
 #              fill, clock, pile, pile_turn, directory
-#   scene:     repeat, travel, pause, explode, background, seed,
+#   scene:     text, repeat, travel, pause, explode, background, seed,
 #              color (final R,G,B), starting (X,Y percent from left/bottom),
 #              timing (seconds after the previous scene; negative: overlap)
 # Scenes right after each other play as one block over one background.
-# Options not given come from the service (DEFAULT_ARGS, make config).
+# show_args: options of fb-slideshow.py for the whole show (as on the
+# command line); they win over the service (DEFAULT_ARGS, make config), and
+# a step's own options win over them. Changing display options there
+# (clock, gamma, ...) restarts the show by itself.
 
 loop: true            # after the last step start again (false: play once)
+show_args:
+  transitions: stack
+  duration: 3
+  easing: ease-out
 sequence:
   - scene:
+      text: XXX           # what flies (default XXX)
       repeat: 3
       travel: 8
   - scene:

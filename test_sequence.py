@@ -238,7 +238,7 @@ def test_main_check_validates_the_config(tmp_path, capsys):
     bad.write_text("sequence:\n  - slideshow: {hold: five}\n")
     assert seq.main(["--config", str(good), "--check"]) == 0
     out = capsys.readouterr().out
-    assert "ok: scene x3, scene x1 -3s, slideshow 10 min (loop)" in out
+    assert "ok: scene XXX x3, scene XXX x1 -3s, slideshow 10 min (loop)" in out
     assert seq.main(["--config", str(bad), "--check"]) == 2
     assert "argument --hold" in capsys.readouterr().err
     assert seq.main(["--config", str(tmp_path / "none.yaml"), "--check"]) == 0
@@ -279,7 +279,7 @@ sequence:
     a, b = cfg.steps[0].args, cfg.steps[1].args
     assert a.color == (30, 180, 10) and a.starting is None
     assert b.timing == -3 and b.starting == (100, 20)
-    assert cfg.steps[1].text == "scene x1 -3s"
+    assert cfg.steps[1].text == "scene XXX x1 -3s"
 
 
 def test_scene_block_timeline_overlaps_and_shares_the_background():
@@ -325,7 +325,7 @@ sequence:
     seq.run(FakeDisplay(), StaticConfig(cfg), None, random.Random(0),
             rounds=1, log=logs.append)
     assert [[round(s, 2) for s, _ in b] for b in blocks] == [[0, 0.2]]
-    assert logs == ["step: scene x1 + scene x1 -0.2s"]
+    assert logs == ["step: scene XXX x1 + scene XXX x1 -0.2s"]
 
 
 # ------------------------------------------------------- photo pile (issue #20)
@@ -369,3 +369,105 @@ sequence:
     assert len(order) >= 6
     # none skipped (the playlist starts again after the 8th)
     assert order == [f"{i % 8:02d}.jpg" for i in range(len(order))]
+
+
+# ------------------------------------------------- show_args (issue #31)
+def slideshow_args(cfg):
+    return vars(cfg.steps[-1].args)
+
+
+def test_show_args_in_config_same_as_on_the_command_line():
+    # acceptance: DEFAULT_ARGS=--transitions cut == show_args in config.yaml
+    via_service = seq.parse_config("sequence:\n  - slideshow\n", ["--transitions", "cut"])
+    via_config = seq.parse_config("show_args:\n  transitions: cut\n"
+                                  "sequence:\n  - slideshow\n")
+    assert slideshow_args(via_config) == slideshow_args(via_service)
+    assert via_config.steps[0].args.transitions == ["cut"]
+
+
+@pytest.mark.parametrize("form", [
+    "show_args:\n  transitions: stack\n  duration: 3\n  easing: ease-out\n  shuffle: true\n",
+    "show_args:\n  - transitions stack\n  - duration: 3\n  - easing: ease-out\n  - shuffle\n",
+    "show_args: --transitions stack --duration 3 --easing ease-out --shuffle\n",
+])
+def test_show_args_forms(form):
+    cfg = seq.parse_config(form + "sequence:\n  - slideshow\n")
+    a = cfg.steps[0].args
+    assert a.transitions == ["stack"] and a.duration == 3
+    assert a.easing == "ease-out" and a.shuffle
+    assert cfg.show_argv[:2] == ("--transitions", "stack")
+
+
+def test_show_args_win_over_the_service_and_steps_win_over_show_args():
+    cfg = seq.parse_config("""
+show_args: {hold: 7, transitions: cut}
+sequence:
+  - slideshow: {minutes: 1}
+  - slideshow: {minutes: 1, hold: 2}
+""", ["--hold", "20", "--transitions", "stack", "--duration", "3"])
+    a, b = cfg.steps
+    assert a.args.hold == 7 and a.args.transitions == ["cut"] and a.args.duration == 3
+    assert b.args.hold == 2 and b.args.transitions == ["cut"]
+
+
+def test_show_args_directory_and_display_options():
+    cfg = seq.parse_config("show_args: {directory: /pics, no-clock: true, gamma: 1.5}\n"
+                           "sequence:\n  - slideshow\n")
+    a = cfg.steps[0].args
+    assert a.directory == "/pics" and not a.clock and a.gamma == (1.5, 1.5, 1.5)
+
+
+@pytest.mark.parametrize("text, msg", [
+    ("show_args: {holdd: 5}", "show_args: unrecognized arguments"),
+    ("show_args: {hold: x}", "show_args: argument --hold"),
+    ("show_args: {once: true}", "'once' can't be set here"),
+    ("show_args: --check", "'check' can't be set here"),
+    ("show_args: hold 5", "starts with '--'"),
+    ("show_args: 5", "expected 'name: value' lines or a list"),
+])
+def test_show_args_errors(text, msg):
+    with pytest.raises(seq.ConfigError) as e:
+        seq.parse_config(text + "\nsequence:\n  - slideshow\n")
+    assert msg in str(e.value)
+
+
+def test_display_options_in_show_args_need_a_restart(tmp_path):
+    f = tmp_path / "config.yaml"
+    f.write_text("show_args: {hold: 5}\nsequence:\n  - slideshow: {minutes: 1}\n")
+    cf = seq.ConfigFile(str(f), ["--size", "480x320"], log=lambda m: None)
+    cf.get()
+    opened = cf.display_key()
+    f.write_text("show_args: {hold: 9, shuffle: true}\nsequence:\n  - slideshow: {minutes: 1}\n")
+    os.utime(f, (1, 1))
+    cf.get()
+    assert cf.display_key() == opened  # slideshow options: no restart
+    f.write_text("show_args: {no-clock: true}\nsequence:\n  - slideshow: {minutes: 1}\n")
+    os.utime(f, (2, 2))
+    with pytest.raises(seq.RestartNeeded):
+        seq.run(FakeDisplay(), cf, None, random.Random(1), clock=Clock(),
+                sleep=lambda s: None, rounds=1, opened_with=opened)
+
+
+def test_main_exits_for_a_restart_when_display_options_change(tmp_path, monkeypatch):
+    d = pictures(tmp_path, 2)
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("show_args: {no-clock: true}\nsequence:\n  - slideshow: {hold: 0}\n")
+    fb = tmp_path / "fb"
+    fb.write_bytes(b"")
+    calls = []
+
+    def fake_run(*a, opened_with=None, **kw):
+        calls.append(opened_with)
+        raise seq.RestartNeeded()
+    monkeypatch.setattr(seq, "run", fake_run)
+    assert seq.main(["--config", str(cfg), str(d), "--fb", str(fb), "--size",
+                     f"{W}x{H}", "--invert", "off"]) == seq.RESTART_EXIT
+    # the display was opened with the config's show_args (no clock)
+    base = fbs.parse_args([str(d), "--size", f"{W}x{H}", "--no-clock"], env={})
+    assert calls[0][seq.RESTART_OPTIONS.index("clock")] == repr(base.clock)
+
+
+def test_scene_text_per_step():
+    cfg = seq.parse_config("sequence:\n  - scene: {text: 140}\n  - scene\n")
+    assert [s.args.text for s in cfg.steps] == ["140", "XXX"]
+    assert cfg.steps[0].text == "scene 140 x1"
