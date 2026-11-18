@@ -11,12 +11,17 @@ sc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sc)
 fbs = sc.fbs
 
+
+def scene140(*args, **kw):
+    """The scene with the text "140" (the geometry tests were made for it)."""
+    return sc.Scene(*args, text="140", **kw)
+
 W, H = 480, 320
 
 
 @pytest.fixture(scope="module")
 def scene():
-    return sc.Scene((W, H), seed=1)
+    return scene140((W, H), seed=1)
 
 
 def ink(frame, thresh=40):
@@ -78,9 +83,9 @@ def test_burst_fills_the_screen_and_fades_out(scene):
 
 
 def test_same_seed_same_burst():
-    a = sc.Scene((W, H), seed=7).frame(8.0)[0]
-    b = sc.Scene((W, H), seed=7).frame(8.0)[0]
-    c = sc.Scene((W, H), seed=8).frame(8.0)[0]
+    a = scene140((W, H), seed=7).frame(8.0)[0]
+    b = scene140((W, H), seed=7).frame(8.0)[0]
+    c = scene140((W, H), seed=8).frame(8.0)[0]
     assert np.array_equal(a, b) and not np.array_equal(a, c)
 
 
@@ -102,7 +107,7 @@ def test_play_writes_only_the_rows_of_the_small_number(tmp_path):
     real_rows, real_show = d.show_rows, d.show
     d.show_rows = lambda f, y0, y1: (writes.append((y0, y1)), real_rows(f, y0, y1))
     d.show = lambda f: (writes.append((0, H)), real_show(f))
-    scene = sc.Scene((W, H), travel=2.0, pause=0.2, explode=1.0, seed=1)
+    scene = scene140((W, H), travel=2.0, pause=0.2, explode=1.0, seed=1)
     n = sc.play(d, scene, clock=Clock(0.05), sleep=lambda s: None)
     assert n > 10
     first = writes[2:5]  # after the initial black and the first full frame
@@ -162,7 +167,7 @@ def picture():
 
 
 def test_background_picture_stays_behind_the_number(picture):
-    s = sc.Scene((W, H), seed=1, background=picture)
+    s = scene140((W, H), seed=1, background=picture)
     frame, (y0, y1) = s.frame(0)
     assert np.array_equal(frame[:y0], picture[:y0])
     assert np.array_equal(frame[y1:], picture[y1:])
@@ -175,7 +180,7 @@ def test_background_picture_stays_behind_the_number(picture):
 
 
 def test_background_shows_through_as_the_fragments_fade(picture):
-    s = sc.Scene((W, H), seed=1, background=picture)
+    s = scene140((W, H), seed=1, background=picture)
     t = s.travel + s.pause
     diff = [np.abs(s.frame(t + f * s.explode)[0].astype(int) - picture).mean()
             for f in (0.1, 0.5, 0.95)]
@@ -185,7 +190,7 @@ def test_background_shows_through_as_the_fragments_fade(picture):
 
 def test_number_has_a_dark_rim_on_bright_pictures():
     white = np.full((H, W, 3), 255, np.uint8)
-    s = sc.Scene((W, H), seed=1, background=white)
+    s = scene140((W, H), seed=1, background=white)
     frame, _ = s.frame(0)  # white number on white: only the rim shows it
     assert frame.min() < 200
 
@@ -203,7 +208,7 @@ def test_load_background(tmp_path):
 
 # ------------------------------------------------- variable scene (issue #17)
 def test_color_option_ends_in_that_color():
-    s = sc.Scene((W, H), seed=1, color=(30, 180, 10))
+    s = scene140((W, H), seed=1, color=(30, 180, 10))
     assert sc.ramp_color(0, s.ramp) == (255, 255, 255)
     frame, _ = s.frame(s.travel + 0.1)
     xs, ys = ink(frame)
@@ -216,7 +221,7 @@ def test_color_option_ends_in_that_color():
 
 
 def test_starting_option_in_percent_from_left_and_bottom():
-    s = sc.Scene((W, H), seed=1, start=(70, 10))
+    s = scene140((W, H), seed=1, start=(70, 10))
     xs, ys = ink(s.frame(0)[0])
     assert abs(xs.min() - 0.7 * W) <= 2
     assert abs((H - ys.max()) - 0.1 * H) <= 3
@@ -255,8 +260,8 @@ class FakeDisplay:
 
 def test_play_many_overlapping_scenes_are_drawn_together():
     bg = np.full((H, W, 3), 40, np.uint8)
-    a = sc.Scene((W, H), 1.0, 0.0, 1.0, seed=1, background=bg)
-    b = sc.Scene((W, H), 1.0, 0.0, 1.0, seed=2, background=bg,
+    a = scene140((W, H), 1.0, 0.0, 1.0, seed=1, background=bg)
+    b = scene140((W, H), 1.0, 0.0, 1.0, seed=2, background=bg,
                  color=(30, 180, 10), start=(80, 60))
     seen = []
     real = sc.Scene.draw
@@ -278,10 +283,35 @@ def test_play_many_overlapping_scenes_are_drawn_together():
 
 
 def test_play_many_stops_starting_scenes_when_told():
-    a = sc.Scene((W, H), 0.3, 0.0, 0.3, seed=1)
+    a = scene140((W, H), 0.3, 0.0, 0.3, seed=1)
     import itertools
     endless = ((i * 0.6, a) for i in itertools.count())
     clock = Clock(0.05)
     sc.play_many(FakeDisplay(), endless, clock=clock, sleep=lambda s: None,
                  stop=lambda: clock.t > 2)
     assert clock.t < 5
+
+
+def test_text_option_and_default():
+    assert sc.parse_args([]).text == "XXX"
+    assert sc.parse_args(["--text", "140"]).text == "140"
+    for bad in ["", "   ", "x" * 41]:
+        with pytest.raises(SystemExit):
+            sc.parse_args(["--text", bad])
+
+
+def test_long_text_fits_the_width():
+    s = sc.Scene((W, H), seed=1, text="Happy Birthday Richard")
+    assert s.text == "Happy Birthday Richard"
+    assert s.end_h < sc.END_HEIGHT * H                 # smaller than 140 ends
+    assert s.master.shape[1] <= sc.END_WIDTH * W + 1   # fits the width
+    assert s.start_h <= s.end_h
+    frame, _ = s.frame(s.travel + 0.1)
+    assert frame.shape == (H, W, 3)
+
+
+def test_short_text_ends_half_the_screen_high():
+    assert sc.Scene((W, H), seed=1, text="1").end_h == sc.END_HEIGHT * H
+    s = sc.Scene((W, H), seed=1)  # "XXX": a bit wider than the screen
+    assert s.master.shape[1] <= sc.END_WIDTH * W
+    assert 0.8 * sc.END_HEIGHT * H < s.end_h <= sc.END_HEIGHT * H

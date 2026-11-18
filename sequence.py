@@ -7,8 +7,13 @@ is the plain slideshow, exactly as before.
     /mnt/stick/config.yaml:
 
     loop: true              # start again from the top (default true)
+    show_args:              # options of fb-slideshow.py for the whole show
+      transitions: stack
+      duration: 3
+      easing: ease-out
     sequence:
       - scene:              # options as for scene140.py
+          text: 140
           repeat: 3
           travel: 8
       - scene:              # follows a scene: starts 3 s before its end
@@ -21,9 +26,11 @@ is the plain slideshow, exactly as before.
           hold: 5
           transitions: stack
 
-A step's options replace the command-line options for that step only.
-Display options (fb, size, gamma, ...) are set on the command line, not per
-step. Scenes following each other play as one block over one background
+show_args are the options of fb-slideshow.py, as on the command line (the
+service's DEFAULT_ARGS and "make config"), and win over those; a step's
+options replace them for that step only. Display options (fb, size, gamma,
+clock, ...) can be set in show_args but not per step; when they change, the
+show exits with code 3 and systemd starts it again with them. Scenes following each other play as one block over one background
 (the first scene's, unless a later one sets its own); "timing" places a scene
 relative to the end of the one before (negative: overlapping). The file is read again at the start of every round, so changes on the
 stick take effect without a restart; if it is broken, the error is logged
@@ -39,6 +46,7 @@ import io
 import itertools
 import os
 import pathlib
+import shlex
 import sys
 import time
 from typing import NamedTuple, Optional
@@ -64,10 +72,17 @@ scene140 = sys.modules.get("scene140") or _load("scene140", "scene140.py")
 DISPLAY_OPTIONS = {"fb", "size", "bpp", "invert", "gamma", "limit", "black",
                    "dither", "diagonal", "clock_hours", "clock_sync_file"}
 NOT_IN_STEPS = {"testcard", "once", "check", "preview", "fps", "config"}
+# options that are used when the display is opened: a change needs a restart
+RESTART_OPTIONS = sorted(DISPLAY_OPTIONS | {"clock", "seed"})
+RESTART_EXIT = 3  # exit code: started again by systemd (Restart=on-failure)
 
 
 class ConfigError(ValueError):
     pass
+
+
+class RestartNeeded(Exception):
+    """show_args changed an option used when the display was opened."""
 
 
 class Step(NamedTuple):
@@ -80,6 +95,7 @@ class Step(NamedTuple):
 class Config(NamedTuple):
     loop: bool
     steps: list
+    show_argv: tuple = ()     # show_args as command-line options
 
 
 def to_argv(opts):
@@ -103,6 +119,61 @@ def to_argv(opts):
     return argv
 
 
+def show_args_argv(value):
+    """show_args from config.yaml -> command-line options. Accepts
+        show_args: {transitions: stack, duration: 3, shuffle: true}
+        show_args: [transitions stack, "duration: 3", {easing: ease-out}, shuffle]
+        show_args: --transitions stack --duration 3"""
+    if value is None:
+        return []
+    argv = []
+    if isinstance(value, str):  # one line, as on the command line
+        argv, value = shlex.split(value), {}
+        if argv and not argv[0].startswith("-"):
+            raise ConfigError("show_args: a line of options starts with '--'")
+    items = value.items() if isinstance(value, dict) else None
+    if items is None:
+        if not isinstance(value, list):
+            raise ConfigError("show_args: expected 'name: value' lines or a list")
+        pairs = []
+        for item in value:
+            if isinstance(item, dict):
+                pairs += item.items()
+            elif isinstance(item, str) and item.strip():
+                name, _, rest = item.strip().partition(" ")
+                name = name.rstrip(":")
+                rest = rest.strip()
+                pairs.append((name, rest if rest else True))
+            else:
+                raise ConfigError(f"show_args: can't read {item!r}")
+        items = pairs
+    directory = None
+    opts = {}
+    for key, val in items:
+        key = str(key).lstrip("-")
+        if key.replace("-", "_") in NOT_IN_STEPS:
+            raise ConfigError(f"show_args: '{key}' can't be set here")
+        if key == "directory":
+            directory = val
+        else:
+            opts[key] = val
+    argv += to_argv(opts)
+    for tok in argv:
+        name = tok[2:].split("=")[0].replace("-", "_") if tok.startswith("--") else ""
+        if name in NOT_IN_STEPS:
+            raise ConfigError(f"show_args: '{name}' can't be set here")
+    if directory is not None:
+        if not isinstance(directory, str):
+            raise ConfigError("show_args: directory must be a path")
+        argv.append(directory)
+    return argv
+
+
+def display_key(args):
+    """The options of a parsed fb-slideshow.py namespace that need a restart."""
+    return tuple(repr(getattr(args, k, None)) for k in RESTART_OPTIONS)
+
+
 def _parse(parser, argv, where):
     """Run an argparse-based parser; its error message becomes a ConfigError."""
     err = io.StringIO()
@@ -124,12 +195,15 @@ def parse_config(text, base_argv=()):
         raise ConfigError(f"not valid YAML: {e}")
     if not isinstance(data, dict):
         raise ConfigError("expected 'sequence:' with a list of steps")
-    unknown = set(data) - {"loop", "sequence"}
+    unknown = set(data) - {"loop", "sequence", "show_args"}
     if unknown:
         raise ConfigError(f"unknown setting: {', '.join(sorted(map(str, unknown)))}")
     loop = data.get("loop", True)
     if not isinstance(loop, bool):
         raise ConfigError("loop: must be true or false")
+    show_argv = show_args_argv(data.get("show_args"))
+    base_argv = [*base_argv, *show_argv]
+    _parse(lambda a: fbs.parse_args(a, env={}), list(base_argv), "show_args")
     seq = data.get("sequence")
     if not isinstance(seq, list) or not seq:
         raise ConfigError("sequence: must be a list with at least one step")
@@ -171,7 +245,7 @@ def parse_config(text, base_argv=()):
             args.background_set = "background" in opts
             seconds = None if args.repeat == 0 else 0
             steps.append(Step(kind, args, seconds,
-                              f"scene x{args.repeat or 'forever'}"
+                              f"scene {args.text} x{args.repeat or 'forever'}"
                               + (f" {args.timing:+g}s" if args.timing else "")))
         else:
             raise ConfigError(f"step {i}: unknown step '{kind}' "
@@ -181,7 +255,7 @@ def parse_config(text, base_argv=()):
             raise ConfigError(f"'{step.text}' never ends, so the steps after it "
                               "would never play: give it minutes / repeat, or "
                               "make it the last step")
-    return Config(loop, steps)
+    return Config(loop, steps, tuple(show_argv))
 
 
 def plain(base_argv):
@@ -198,6 +272,13 @@ class ConfigFile:
         self._stamp = ()  # never a real stamp: the first get() reads/logs
         self.config = plain(self.base_argv)
         self.good = False  # a config from the file was read successfully
+
+    def display_args(self):
+        """fb-slideshow.py options of the whole show: command line + show_args."""
+        return fbs.parse_args([*self.base_argv, *self.config.show_argv], env={})
+
+    def display_key(self):
+        return display_key(self.display_args())
 
     def _current(self):
         try:
@@ -253,7 +334,8 @@ def scene_entries(block, size, load=scene140.load_background):
                 else block[0].args.background)
         scenes.append((a, scene140.Scene(size, a.travel, a.pause, a.explode,
                                          a.seed, background=picture(path),
-                                         color=a.color, start=a.starting)))
+                                         color=a.color, start=a.starting,
+                                         text=a.text)))
 
     def timeline():
         end = start = 0.0
@@ -270,15 +352,19 @@ def scene_entries(block, size, load=scene140.load_background):
 
 def run(display, config_file, overlay, rng, paused=lambda: False,
         clock=time.monotonic, sleep=time.sleep, rounds=None, once=False,
-        log=fbs.log):
+        log=fbs.log, opened_with=None):
     """Plays the steps, round after round (rounds=None: forever, unless the
     config says loop: false). When the config file changes, the current
     slideshow step ends after its picture and a new round starts with the
-    new config. once: every picture only once (testing)."""
+    new config. once: every picture only once (testing). opened_with: the
+    display_key() the display was opened with; a config whose show_args
+    change it raises RestartNeeded."""
     playlists = {}   # (directory, shuffle) -> iterator, continues across steps
     last = None      # frame on the display
     for _ in itertools.count() if rounds is None else range(rounds):
         cfg = config_file.get()
+        if opened_with is not None and config_file.display_key() != opened_with:
+            raise RestartNeeded()
         steps = cfg.steps
         i = 0
         interrupted = False
@@ -356,6 +442,9 @@ def main(argv=None):
         return 0
     if base.testcard:
         return fbs.main(base_argv)
+    config_file = ConfigFile(own.config, base_argv)
+    config_file.get()
+    base = config_file.display_args()  # with show_args from the config
     opened = fbs.open_display(base)
     if opened is None:
         return 2
@@ -363,10 +452,13 @@ def main(argv=None):
     paused = fbs.install_signals()
     rng, seed = fbs.make_rng(base)
     fbs.log("Sequence " + fbs.describe(base, display, overlay, seed))
-    config_file = ConfigFile(own.config, base_argv)
     try:
         run(display, config_file, overlay, rng, paused.is_set,
-            rounds=1 if base.once else None, once=base.once)
+            rounds=1 if base.once else None, once=base.once,
+            opened_with=display_key(base))
+    except RestartNeeded:
+        fbs.log(f"{own.config}: display options in show_args changed - restarting")
+        return RESTART_EXIT
     except (KeyboardInterrupt, SystemExit):
         pass
     finally:

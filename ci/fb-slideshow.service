@@ -18,7 +18,7 @@
 
 [Unit]
 Description=Framebuffer slideshow on the SPI display
-Documentation=https://github.com/fritzthekid/richards-show
+Documentation=https://github.com/fritzthekid/fb-slideshow
 # keep retrying while /dev/fb1 or the stick are not ready after boot
 StartLimitIntervalSec=0
 
