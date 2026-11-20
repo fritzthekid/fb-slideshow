@@ -9,8 +9,10 @@ ConditionPathIsMountPoint=/mnt/stick
 
 [Service]
 Type=oneshot
-# the Nextcloud folder (remote "nc" from make diashow-setup) and the target
+# where from: "cloud:" in config.yaml on the stick; without it the folder of
+# the remote "nc" (make diashow-setup) below. The target on the stick.
 Environment=DIASHOW_SRC=nc:bilder DIASHOW_DEST=/mnt/stick/bilder
+Environment=DIASHOW_CONFIG=/mnt/stick/config.yaml
 ExecStart=%h/fb-slideshow/ci/diashow-sync.sh
 Nice=10
 IOSchedulingClass=idle

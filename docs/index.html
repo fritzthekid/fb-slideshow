@@ -1,0 +1,100 @@
+---
+layout: default
+title: Übersicht
+---
+
+<section>
+  <nav>
+    <ul>
+      <li><a href="#sec-ziel">Worum es geht</a></li>
+      <li><a href="#sec-teile">Wie die Teile zusammenspielen</a></li>
+      <li><a href="#sec-start">Erste Schritte</a></li>
+      <li><a href="#sec-befehle">Befehle</a></li>
+      <hr>
+      {% include pages.html %}
+    </ul>
+  </nav>
+
+  <article>
+    <h1>fb-slideshow – Dokumentation</h1>
+
+    <p><strong>Hinweis</strong>: Die Software wird ohne Gewähr angeboten.
+      Quellcode: <a href="https://github.com/fritzthekid/fb-slideshow">github.com/fritzthekid/fb-slideshow</a></p>
+
+    <h2 id="sec-ziel">Worum es geht</h2>
+    <p>
+      Ein Raspberry Pi mit einem kleinen 3,5-Zoll-Display (480×320 Pixel)
+      zeigt als digitaler Bilderrahmen Fotos, mit sanften Übergängen,
+      einer kleinen Uhr und gelegentlich einer <em>Szene</em>: Ein Text fliegt
+      von klein nach groß in die Bildmitte und zerfällt dort in Funken.
+    </p>
+    <div class="screens">
+      <figure><img src="{{ site.baseurl }}/static/img/stapel.png" alt="Fotostapel"><figcaption>Diashow: das oberste Foto wird vom Stapel gezogen</figcaption></figure>
+      <figure><img src="{{ site.baseurl }}/static/img/szene-ende.png" alt="Szene"><figcaption>Szene: der Text ist in der Mitte angekommen</figcaption></figure>
+      <figure><img src="{{ site.baseurl }}/static/img/szene-zerfall.png" alt="Zerfall"><figcaption>… und zerfällt in Funken</figcaption></figure>
+    </div>
+    <div class="info-box">
+      <strong>Alles, was gezeigt wird, steht in einer einzigen Datei:
+      <code>config.yaml</code> auf dem USB-Stick.</strong>
+      Die Bilder kommen aus einer Cloud (Nextcloud), in die mehrere Personen
+      Fotos hochladen können, ohne Zugang zum Gerät zu haben.
+    </div>
+
+    <h2 id="sec-teile">Wie die Teile zusammenspielen</h2>
+    <pre>  Bildlieferanten                Cloud (Nextcloud)               Raspberry Pi
+  (Handy, Browser)  ──Upload──▶  Ordner "bilder"   ──stündlich──▶  USB-Stick /mnt/stick
+                    Upload-Link                     rclone         ├── config.yaml
+                    + Passwort                                     └── bilder/*.jpg
+                                                                        │
+                                                                        ▼
+                                                                   Display 480×320</pre>
+    <ul>
+      <li><strong>USB-Stick</strong> (<code>/mnt/stick</code>): enthält
+        <code>config.yaml</code> und den Ordner <code>bilder/</code>.
+        Änderungen an <code>config.yaml</code> wirken ohne Neustart, spätestens
+        nach dem aktuellen Bild.</li>
+      <li><strong>Cloud</strong>: Adresse, Benutzer und Ordner stehen im
+        Abschnitt <code>cloud:</code> der <code>config.yaml</code>. Das
+        <strong>Passwort</strong> liegt nur auf der SD-Karte des Raspberry Pi,
+        nie auf dem Stick. Siehe <a href="cloud.html">Cloud einrichten</a>.</li>
+      <li><strong>Abgleich</strong>: Zwei Minuten nach dem Einschalten und
+        danach stündlich holt der Pi neue Bilder aus der Cloud auf den Stick.
+        Bilder, die in der Cloud gelöscht wurden, verschwinden auch vom Stick.</li>
+      <li><strong>Bildlieferanten</strong> bekommen nur einen Upload-Link mit
+        eigenem Passwort. Sie können Bilder hinzufügen, aber nichts sehen oder
+        löschen. Anleitung für sie: <a href="bilder-hochladen.html">Bilder hochladen</a>.</li>
+    </ul>
+
+    <h2 id="sec-start">Erste Schritte</h2>
+    <ol>
+      <li><strong>Eine <code>config.yaml</code> schreiben</strong>, am
+        einfachsten ausgehend von einem der <a href="beispiele.html">Beispiele</a>,
+        und auf den Stick kopieren (<code>/mnt/stick/config.yaml</code>).
+        Ohne diese Datei zeigt das Gerät einfach alle Bilder nacheinander.</li>
+      <li><strong>Die Cloud eintragen</strong>: Abschnitt <code>cloud:</code>
+        mit Adresse, Benutzer und Ordner, dann einmal das App-Passwort auf dem
+        Pi hinterlegen (<code>make diashow-setup</code>), siehe
+        <a href="cloud.html">Cloud einrichten</a>.</li>
+      <li><strong>Upload-Link anlegen</strong> und an die Bildlieferanten
+        weitergeben.</li>
+      <li><strong>Prüfen</strong>: <code>make start</code> meldet einen Fehler
+        in der Datei sofort, <code>make status</code> zeigt, was gerade
+        läuft.</li>
+    </ol>
+
+    <h2 id="sec-befehle">Befehle</h2>
+    <p>Die Befehle laufen auf dem Rechner mit dem Quellcode und sprechen den Pi
+      per ssh an (Einzelheiten im
+      <a href="https://github.com/fritzthekid/fb-slideshow#readme">README</a>).</p>
+    <table>
+      <tr><th>Befehl</th><th class="text">Wirkung</th></tr>
+      <tr><td><code>make start</code> / <code>make restart</code></td><td class="text">Diashow starten bzw. neu starten; meldet eine fehlerhafte <code>config.yaml</code></td></tr>
+      <tr><td><code>make stop</code>, <code>make pause</code>, <code>make resume</code></td><td class="text">anhalten, pausieren, weiter</td></tr>
+      <tr><td><code>make status</code></td><td class="text">läuft sie? welche Sequenz? letzter Cloud-Abgleich</td></tr>
+      <tr><td><code>make sequence</code></td><td class="text">lokale <code>config.yaml</code> prüfen und auf den Stick kopieren</td></tr>
+      <tr><td><code>make movie</code></td><td class="text">die Sequenz als Film rendern, um sie vorher anzusehen</td></tr>
+      <tr><td><code>make diashow-setup</code></td><td class="text">App-Passwort der Cloud auf dem Pi hinterlegen (nur auf der SD-Karte)</td></tr>
+      <tr><td><code>make diashow-sync</code></td><td class="text">Bilder jetzt aus der Cloud holen</td></tr>
+    </table>
+  </article>
+</section>

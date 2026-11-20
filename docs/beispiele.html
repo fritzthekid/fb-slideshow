@@ -1,0 +1,188 @@
+---
+layout: default
+title: Beispiele
+---
+
+<section>
+  <nav>
+    <ul>
+      <li><a href="{{ site.baseurl }}/">← Übersicht</a></li>
+      <hr>
+      <li><a href="#bsp-minimal">1. Nur Bilder</a></li>
+      <li><a href="#bsp-stapel">2. Fotostapel, zufällig</a></li>
+      <li><a href="#bsp-gruss">3. Gruß, dann Bilder</a></li>
+      <li><a href="#bsp-countdown">4. Countdown (überlappend)</a></li>
+      <li><a href="#bsp-farben">5. Drei Farben, ein Block</a></li>
+      <li><a href="#bsp-ordner">6. Zwei Bilderordner</a></li>
+      <li><a href="#bsp-uebergaenge">7. Wechselnde Übergänge</a></li>
+      <li><a href="#bsp-display">8. Ohne Uhr, gedämpft</a></li>
+      <li><a href="#bsp-einmal">9. Einmal abspielen</a></li>
+      <li><a href="#bsp-cloud">10. Komplett mit Cloud</a></li>
+      <hr>
+      {% include pages.html %}
+    </ul>
+  </nav>
+
+  <article>
+    <h1>Beispiele für config.yaml</h1>
+    <p>
+      Jedes Beispiel ist eine vollständige Datei. Kopieren, anpassen und als
+      <code>/mnt/stick/config.yaml</code> speichern. Alle Einstellungen sind unter
+      <a href="konfiguration.html">Konfiguration</a> erklärt. Die Beispiele werden
+      bei jedem Test des Quellcodes automatisch auf Gültigkeit geprüft.
+    </p>
+
+    <h2 id="bsp-minimal">1. Nur Bilder</h2>
+    <p>Alle Bilder vom Stick nacheinander, endlos. Entspricht dem Verhalten ganz ohne Datei.</p>
+    <pre class="yaml">sequence:
+  - slideshow</pre>
+
+    <h2 id="bsp-stapel">2. Fotostapel, zufällige Reihenfolge</h2>
+    <p>Die Bilder liegen als Abzüge auf einem Stapel; das oberste wird weggezogen.
+      Das darunterliegende ist leicht gedreht, jedes Bild bleibt 8 Sekunden.</p>
+    <img class="screen" src="{{ site.baseurl }}/static/img/stapel.png" alt="Fotostapel">
+    <pre class="yaml">show_args:
+  transitions: stack
+  duration: 3
+  easing: ease-out
+sequence:
+  - slideshow:
+      shuffle: true
+      hold: 8
+      pile_turn: 4</pre>
+
+    <h2 id="bsp-gruss">3. Gruß, dann Bilder</h2>
+    <p>Zu Beginn jeder Runde fliegt ein Gruß ins Bild, danach 15 Minuten Fotos.</p>
+    <pre class="yaml">sequence:
+  - scene:
+      text: Hallo Oma!
+      travel: 8
+  - slideshow:
+      minutes: 15
+      shuffle: true</pre>
+
+    <h2 id="bsp-countdown">4. Countdown, überlappend</h2>
+    <p>
+      „3“, „2“, „1“ und „Los!“ als ein Block über einem Hintergrund. Jede Zahl
+      startet 3 Sekunden vor dem Ende der vorigen (<code>timing: -3</code>), so
+      steigt die nächste schon auf, während die vorige verglüht.
+    </p>
+    <pre class="yaml">sequence:
+  - scene:
+      text: 3
+      travel: 4
+  - scene:
+      text: 2
+      travel: 4
+      timing: -3
+  - scene:
+      text: 1
+      travel: 4
+      timing: -3
+  - scene:
+      text: Los!
+      travel: 5
+      pause: 2
+      color: 30, 180, 10
+      timing: -2
+  - slideshow:
+      minutes: 10</pre>
+
+    <h2 id="bsp-farben">5. Drei Farben von drei Orten</h2>
+    <p>Drei Texte starten an verschiedenen Stellen und enden in eigenen Farben.</p>
+    <img class="screen" src="{{ site.baseurl }}/static/img/szene-farbe.png" alt="grüner Text">
+    <pre class="yaml">sequence:
+  - scene:
+      text: Rot
+  - scene:
+      text: Grün
+      color: 30, 180, 10      # Endfarbe R, G, B
+      starting: 70, 10        # 70 % von links, 10 % von unten
+      timing: -3
+  - scene:
+      text: Blau
+      color: 30, 30, 180
+      starting: 10, 50
+      timing: -3
+  - slideshow:
+      minutes: 5</pre>
+
+    <h2 id="bsp-ordner">6. Zwei Bilderordner im Wechsel</h2>
+    <p>
+      Fünf Minuten Familienbilder, dann zwei Minuten Urlaub, immer im Wechsel.
+      Jeder Ordner läuft dort weiter, wo er zuletzt aufgehört hat.
+    </p>
+    <pre class="yaml">sequence:
+  - slideshow:
+      minutes: 5
+      directory: /mnt/stick/bilder
+  - slideshow:
+      minutes: 2
+      directory: /mnt/stick/urlaub
+      transitions: fade
+      fill: true</pre>
+
+    <h2 id="bsp-uebergaenge">7. Wechselnde Übergänge</h2>
+    <p>Pro Bild ein zufälliger Übergang aus der Liste, nie zweimal derselbe hintereinander.</p>
+    <pre class="yaml">show_args:
+  transitions: fade, wipe, push, iris
+  duration: 2
+sequence:
+  - slideshow:
+      hold: 6</pre>
+
+    <h2 id="bsp-display">8. Ohne Uhr, gedämpft</h2>
+    <p>
+      Display-Einstellungen gehen nur in <code>show_args</code>. Ändern sie sich,
+      startet die Show von selbst neu.
+    </p>
+    <pre class="yaml">show_args:
+  clock: false        # keine Uhr
+  limit: 200          # höchstens 200 von 255: etwas dunkler
+  transitions: stack
+sequence:
+  - slideshow</pre>
+
+    <h2 id="bsp-einmal">9. Einmal abspielen</h2>
+    <p>Zum Beispiel für eine Vorführung: einmal durch, danach wird das Display schwarz.</p>
+    <pre class="yaml">loop: false
+sequence:
+  - scene:
+      text: Willkommen
+      pause: 2
+  - slideshow:
+      minutes: 20
+      hold: 5
+  - scene:
+      text: Danke!
+      color: 255, 200, 0</pre>
+
+    <h2 id="bsp-cloud">10. Komplett, mit Cloud</h2>
+    <p>
+      Die Bilder kommen aus dem Ordner <code>Diashow</code> des Kontos
+      <code>diashow</code>. Das Passwort steht <strong>nicht</strong> in der Datei;
+      es wird einmal mit <code>make diashow-setup</code> auf der SD-Karte des Pi
+      hinterlegt (<a href="cloud.html">Cloud einrichten</a>).
+    </p>
+    <pre class="yaml">loop: true
+show_args:
+  transitions: stack
+  duration: 3
+  easing: ease-out
+cloud:
+  address: https://cloud.example.org
+  user: diashow
+  folder: Diashow
+sequence:
+  - scene:
+      text: Neue Bilder!
+  - slideshow:
+      minutes: 30
+      shuffle: true
+      hold: 8</pre>
+    <div class="info-box">
+      <strong>Tipp:</strong> Mit <code>make movie CONFIG=meine.yaml</code> lässt sich
+      jedes Beispiel vorher als Film ansehen.
+    </div>
+  </article>
+</section>
