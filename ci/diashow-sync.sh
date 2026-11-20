@@ -9,9 +9,17 @@
 #
 # Run by diashow-sync.service (timer: 2 min after boot, then hourly); offline
 # it fails before touching the stick, the next run tries again.
+#
+# Where from: the "cloud:" section of config.yaml on the stick (public
+# address, user, folder), else $DIASHOW_SRC with the address stored in the
+# rclone remote "nc". The password is only in rclone.conf on the SD card
+# (make diashow-setup).
 set -euf  # -f: the filter patterns are not file names
 
+HERE=$(cd "$(dirname "$0")" && pwd)
 SRC=${DIASHOW_SRC:-nc:bilder}
+CONFIG=${DIASHOW_CONFIG-/mnt/stick/config.yaml}  # empty: not read
+PYTHON=${PYTHON:-python3}
 DEST=${DIASHOW_DEST:-/mnt/stick/bilder}
 MAX_DELETE=${DIASHOW_MAX_DELETE:-20}
 RCLONE=${RCLONE:-rclone}
@@ -25,6 +33,23 @@ if [ -n "$STICK" ]; then
     fstype=$(findmnt -n -o FSTYPE -M "$STICK" 2>/dev/null | tail -n 1)
     if [ -z "$fstype" ] || [ "$fstype" = autofs ]; then
         echo "error: no stick mounted on $STICK - nothing done" >&2
+        exit 1
+    fi
+fi
+
+# cloud: from config.yaml wins over DIASHOW_SRC (rclone reads RCLONE_CONFIG_NC_*
+# as settings of the remote "nc", in front of rclone.conf)
+if [ -n "$CONFIG" ] && [ -f "$CONFIG" ]; then
+    rc=0
+    cloud=$("$PYTHON" "$HERE/../sequence.py" --config "$CONFIG" --cloud) || rc=$?
+    if [ "$rc" -eq 0 ]; then
+        RCLONE_CONFIG_NC_URL=$(printf '%s\n' "$cloud" | sed -n 1p)
+        RCLONE_CONFIG_NC_USER=$(printf '%s\n' "$cloud" | sed -n 2p)
+        export RCLONE_CONFIG_NC_URL RCLONE_CONFIG_NC_USER
+        SRC="nc:$(printf '%s\n' "$cloud" | sed -n 3p)"
+        echo "cloud from $CONFIG: $RCLONE_CONFIG_NC_URL $SRC"
+    elif [ "$rc" -ne 1 ]; then
+        echo "error: cloud: section in $CONFIG not usable - nothing done" >&2
         exit 1
     fi
 fi

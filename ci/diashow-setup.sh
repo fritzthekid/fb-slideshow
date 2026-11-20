@@ -5,11 +5,16 @@
 #   make diashow-setup        (or: ~/fb-slideshow/ci/diashow-setup.sh)
 #
 # The Nextcloud address and user are not kept in the repo. They are taken from
-# DIASHOW_URL / DIASHOW_USER, else from the existing remote "nc" (so a new app
-# password keeps them), else asked for once.
+# DIASHOW_URL / DIASHOW_USER, else from "cloud:" in config.yaml on the stick,
+# else from the existing remote "nc" (so a new app password keeps them), else
+# asked for once. Only the password is asked for every time; it stays here on
+# the SD card (rclone.conf), never on the stick or in config.yaml.
 set -eu
 RCLONE=${RCLONE:-rclone}
 SYSTEMCTL=${SYSTEMCTL:-systemctl}
+PYTHON=${PYTHON:-python3}
+HERE=$(cd "$(dirname "$0")" && pwd)
+CONFIG=${DIASHOW_CONFIG-/mnt/stick/config.yaml}
 
 command -v "$RCLONE" >/dev/null || { echo "rclone missing: sudo apt install rclone" >&2; exit 1; }
 
@@ -19,9 +24,15 @@ ask() {  # ask PROMPT DEFAULT -> answer on stdout (prompt on the terminal)
     printf '%s\n' "${answer:-$2}"
 }
 
+cloud=
+if [ -n "$CONFIG" ] && [ -f "$CONFIG" ]; then
+    cloud=$("$PYTHON" "$HERE/../sequence.py" --config "$CONFIG" --cloud) || cloud=
+fi
 old=$("$RCLONE" config show nc 2>/dev/null || true)
-URL=${DIASHOW_URL:-$(printf '%s\n' "$old" | sed -n 's/^url = //p')}
-USER_NAME=${DIASHOW_USER:-$(printf '%s\n' "$old" | sed -n 's/^user = //p')}
+URL=${DIASHOW_URL:-$(printf '%s\n' "$cloud" | sed -n 1p)}
+URL=${URL:-$(printf '%s\n' "$old" | sed -n 's/^url = //p')}
+USER_NAME=${DIASHOW_USER:-$(printf '%s\n' "$cloud" | sed -n 2p)}
+USER_NAME=${USER_NAME:-$(printf '%s\n' "$old" | sed -n 's/^user = //p')}
 if [ -z "$USER_NAME" ]; then
     [ -t 0 ] || { echo "no Nextcloud user: set DIASHOW_USER" >&2; exit 1; }
     USER_NAME=$(ask "Nextcloud user" diashow)

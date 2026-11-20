@@ -1,0 +1,263 @@
+---
+layout: default
+title: Konfiguration (config.yaml)
+---
+
+<section>
+  <nav>
+    <ul>
+      <li><a href="{{ site.baseurl }}/">← Übersicht</a></li>
+      <hr>
+      <li><a href="#sec-aufbau">Aufbau der Datei</a></li>
+      <li><a href="#sec-yaml">YAML in einer Minute</a></li>
+      <li><a href="#sec-loop">loop</a></li>
+      <li><a href="#sec-showargs">show_args</a></li>
+      <li><a href="#sec-cloud">cloud</a></li>
+      <li><a href="#sec-sequence">sequence</a>
+        <ul>
+          <li><a href="#sec-slideshow">slideshow</a></li>
+          <li><a href="#sec-scene">scene</a></li>
+          <li><a href="#sec-bloecke">Szenen-Blöcke, timing</a></li>
+        </ul>
+      </li>
+      <li><a href="#sec-vorrang">Was gilt wann?</a></li>
+      <li><a href="#sec-pruefen">Prüfen und Fehler</a></li>
+      <li><a href="#sec-film">Vorschau als Film</a></li>
+      <hr>
+      {% include pages.html %}
+    </ul>
+  </nav>
+
+  <article>
+    <h1>Konfiguration: config.yaml</h1>
+
+    <p>
+      Was das Gerät zeigt, steht in <code>/mnt/stick/config.yaml</code> auf dem
+      USB-Stick. Die Datei wird bei jeder Runde neu gelesen: Eine Änderung
+      wirkt nach dem aktuellen Bild bzw. der aktuellen Szene, ohne Neustart.
+      Ohne die Datei zeigt das Gerät alle Bilder aus <code>/mnt/stick/bilder</code>
+      nacheinander, endlos.
+    </p>
+
+    <h2 id="sec-aufbau">Aufbau der Datei</h2>
+    <pre class="yaml">loop: true                 # nach dem letzten Schritt wieder von vorn
+
+show_args:                 # Einstellungen für die ganze Show
+  transitions: stack
+  duration: 3
+  easing: ease-out
+
+cloud:                     # woher die Bilder kommen (ohne Passwort!)
+  address: https://cloud.example.org
+  user: diashow
+  folder: bilder
+
+sequence:                  # was nacheinander gezeigt wird
+  - scene:
+      text: Hallo
+  - slideshow:
+      minutes: 10
+      shuffle: true</pre>
+    <table>
+      <tr><th>Abschnitt</th><th>Pflicht</th><th class="text">Bedeutung</th></tr>
+      <tr><td><code>sequence</code></td><td>ja</td><td class="text">Liste der Schritte: <code>slideshow</code> (Bilder) und <code>scene</code> (fliegender Text)</td></tr>
+      <tr><td><code>loop</code></td><td>nein</td><td class="text"><code>true</code> (Standard): danach wieder von vorn; <code>false</code>: einmal abspielen</td></tr>
+      <tr><td><code>show_args</code></td><td>nein</td><td class="text">Einstellungen der Diashow für alle Schritte (Übergänge, Uhr, Helligkeit …)</td></tr>
+      <tr><td><code>cloud</code></td><td>nein</td><td class="text">Adresse, Benutzer und Ordner der Cloud, aus der die Bilder geholt werden</td></tr>
+    </table>
+
+    <h2 id="sec-yaml">YAML in einer Minute</h2>
+    <ul>
+      <li><strong>Einrückung</strong> zeigt, was zusammengehört. Nur Leerzeichen,
+        keine Tabulatoren; alle Zeilen einer Ebene genau gleich weit eingerückt.</li>
+      <li><code>name: wert</code> setzt eine Einstellung. Nach dem Doppelpunkt
+        ein Leerzeichen.</li>
+      <li><code>- </code> am Zeilenanfang beginnt einen Listeneintrag (einen Schritt).</li>
+      <li><code>#</code> leitet einen Kommentar ein, der Rest der Zeile wird ignoriert.</li>
+      <li><code>true</code>/<code>false</code> für Ein/Aus. Texte mit Sonderzeichen
+        (<code>:</code> <code>#</code>) in Anführungszeichen: <code>text: "Zeit: jetzt"</code>.</li>
+      <li>Kurzform für wenige Einstellungen: <code>- slideshow: {minutes: 5, hold: 8}</code></li>
+    </ul>
+
+    <h2 id="sec-loop">loop</h2>
+    <p>
+      <code>loop: true</code> (Standard) spielt die Sequenz endlos. Mit
+      <code>loop: false</code> endet sie nach dem letzten Schritt: Das Display
+      wird schwarz, bis die Show neu gestartet wird (<code>make restart</code>
+      oder Aus- und Einschalten).
+    </p>
+
+    <h2 id="sec-showargs">show_args – Einstellungen für die ganze Show</h2>
+    <p>
+      <code>show_args</code> gilt für jeden <code>slideshow</code>-Schritt, solange
+      der Schritt selbst nichts anderes sagt. Drei Schreibweisen sind gleichwertig:
+    </p>
+    <pre class="yaml">show_args:                     # 1. name: wert
+  transitions: stack
+  duration: 3
+  shuffle: true</pre>
+    <pre class="yaml">show_args:                     # 2. Liste
+  - transitions stack
+  - duration: 3
+  - shuffle</pre>
+    <pre class="yaml">show_args: --transitions stack --duration 3 --shuffle   # 3. wie auf der Kommandozeile</pre>
+    <table>
+      <tr><th>Einstellung</th><th>Standard</th><th class="text">Bedeutung</th></tr>
+      <tr><td><code>transitions</code></td><td><code>cut</code></td><td class="text">Übergang(e), mehrere durch Komma: <code>stack</code> (Fotostapel), <code>cut</code> (harter Schnitt), <code>fade</code>, <code>wipe</code>, <code>push</code>, <code>blinds</code>, <code>dissolve</code>, <code>iris</code>, <code>zoom</code>, <code>split</code>. Bei mehreren wird pro Bild zufällig gewählt.</td></tr>
+      <tr><td><code>duration</code></td><td>2</td><td class="text">Dauer eines Übergangs in Sekunden</td></tr>
+      <tr><td><code>easing</code></td><td><code>ease-in-out</code></td><td class="text">Geschwindigkeitsverlauf: <code>ease-in-out</code>, <code>ease-out</code>, <code>linear</code></td></tr>
+      <tr><td><code>hold</code></td><td>10</td><td class="text">Sekunden pro Bild</td></tr>
+      <tr><td><code>shuffle</code></td><td>aus</td><td class="text">zufällige Reihenfolge</td></tr>
+      <tr><td><code>fill</code></td><td>aus</td><td class="text">Bild füllt das Display (beschnitten) statt mit Rändern</td></tr>
+      <tr><td><code>pile</code></td><td>an bei <code>stack</code></td><td class="text">Fotostapel: Bilder liegen als Abzüge mit weißem Rand übereinander</td></tr>
+      <tr><td><code>pile_turn</code></td><td>0</td><td class="text">das darunterliegende Foto bis zu so vielen Grad gedreht (0–45)</td></tr>
+      <tr><td><code>clock</code></td><td>an</td><td class="text">kleine Uhr unten links (<code>clock: false</code> schaltet sie ab)</td></tr>
+      <tr><td><code>directory</code></td><td><code>/mnt/stick/bilder</code></td><td class="text">Ordner mit den Bildern</td></tr>
+      <tr><td><code>seed</code></td><td>zufällig</td><td class="text">feste Zufallszahl: gleiche Reihenfolge und Übergänge bei jedem Start</td></tr>
+    </table>
+    <p>
+      <strong>Display-Einstellungen</strong> (<code>clock</code>, <code>clock_hours</code>,
+      <code>diagonal</code>, <code>gamma</code>, <code>limit</code>, <code>black</code>,
+      <code>dither</code>, <code>size</code>, <code>seed</code>) werden beim Öffnen des
+      Displays gebraucht. Sie gehen nur in <code>show_args</code>, nicht in einzelne
+      Schritte. Ändern sie sich, startet die Show von selbst neu (ein paar
+      Sekunden schwarz).
+    </p>
+
+    <h2 id="sec-cloud">cloud – woher die Bilder kommen</h2>
+    <pre class="yaml">cloud:
+  address: https://cloud.example.org   # öffentliche Adresse der Nextcloud
+  user: diashow                        # Konto, mit dem sich der Pi anmeldet
+  folder: bilder                       # Ordner dieses Kontos (Standard: bilder)</pre>
+    <table>
+      <tr><th>Einstellung</th><th>Standard</th><th class="text">Bedeutung</th></tr>
+      <tr><td><code>address</code></td><td>–</td><td class="text">nur der Server, z.&nbsp;B. <code>https://cloud.example.org</code> (ohne <code>https://</code> wird es ergänzt)</td></tr>
+      <tr><td><code>user</code></td><td>–</td><td class="text">Benutzername des Kontos in der Nextcloud</td></tr>
+      <tr><td><code>folder</code></td><td><code>bilder</code></td><td class="text">Ordner in diesem Konto, auch tiefer: <code>Familie/Diashow</code></td></tr>
+    </table>
+    <div class="warn-box">
+      <strong>Kein Passwort in die config.yaml!</strong> Der Stick wird
+      herumgereicht und ist schnell kopiert. Das Passwort liegt nur auf der
+      SD-Karte des Pi (<code>make diashow-setup</code>). Ein Eintrag
+      <code>password:</code> wird abgelehnt. Mehr unter <a href="cloud.html">Cloud einrichten</a>.
+    </div>
+    <p>
+      Ohne <code>cloud:</code> holt der Pi die Bilder von dort, wo sie bei
+      <code>make diashow-setup</code> eingerichtet wurden.
+    </p>
+
+    <h2 id="sec-sequence">sequence – die Schritte</h2>
+    <p>
+      Jeder Eintrag ist ein Schritt, gezeigt von oben nach unten. Ein Schritt
+      ohne Einstellungen: <code>- slideshow</code> oder <code>- scene</code>.
+    </p>
+
+    <h3 id="sec-slideshow">slideshow – Bilder zeigen</h3>
+    <p>
+      Alle Einstellungen aus <a href="#sec-showargs">show_args</a> (außer den
+      Display-Einstellungen) gelten auch hier, dann nur für diesen Schritt. Dazu:
+    </p>
+    <table>
+      <tr><th>Einstellung</th><th>Standard</th><th class="text">Bedeutung</th></tr>
+      <tr><td><code>minutes</code></td><td>endlos</td><td class="text">Dauer des Schritts. Ohne <code>minutes</code> läuft er endlos und muss der letzte Schritt sein.</td></tr>
+      <tr><td><code>directory</code></td><td><code>/mnt/stick/bilder</code></td><td class="text">anderer Bilderordner nur für diesen Schritt</td></tr>
+    </table>
+    <p>
+      Die Bilder laufen über die Schritte hinweg weiter: Ein späterer
+      <code>slideshow</code>-Schritt beginnt mit dem Bild nach dem zuletzt
+      gezeigten, nicht wieder beim ersten.
+    </p>
+
+    <h3 id="sec-scene">scene – fliegender Text</h3>
+    <p>
+      Ein kleiner Text erscheint auf Höhe der Uhr, steigt in einem Bogen in die
+      Mitte, wird dabei groß und färbt sich von Weiß über Gelb nach Rot. In der
+      Mitte zerfällt er in Funken.
+    </p>
+    <div class="screens">
+      <figure><img src="{{ site.baseurl }}/static/img/szene-start.png" alt=""><figcaption>Start: winzig, auf Höhe der Uhr</figcaption></figure>
+      <figure><img src="{{ site.baseurl }}/static/img/szene-mitte.png" alt=""><figcaption>auf dem Weg</figcaption></figure>
+      <figure><img src="{{ site.baseurl }}/static/img/szene-ende.png" alt=""><figcaption>in der Mitte</figcaption></figure>
+      <figure><img src="{{ site.baseurl }}/static/img/szene-zerfall.png" alt=""><figcaption>Zerfall</figcaption></figure>
+    </div>
+    <table>
+      <tr><th>Einstellung</th><th>Standard</th><th class="text">Bedeutung</th></tr>
+      <tr><td><code>text</code></td><td><code>XXX</code></td><td class="text">der fliegende Text, 1–40 Zeichen. Lange Texte werden in der Mitte kleiner, damit sie in die Breite passen.</td></tr>
+      <tr><td><code>repeat</code></td><td>1</td><td class="text">wie oft; <code>0</code> = endlos (nur als letzter Schritt)</td></tr>
+      <tr><td><code>travel</code></td><td>6</td><td class="text">Sekunden für den Flug in die Mitte</td></tr>
+      <tr><td><code>pause</code></td><td>0,6</td><td class="text">Sekunden in der Mitte vor dem Zerfall</td></tr>
+      <tr><td><code>explode</code></td><td>3</td><td class="text">Sekunden für den Zerfall</td></tr>
+      <tr><td><code>color</code></td><td>Weiß → Rot</td><td class="text">Endfarbe als <code>R, G, B</code> (0–255), z.&nbsp;B. <code>30, 180, 10</code> für Grün</td></tr>
+      <tr><td><code>starting</code></td><td><code>33, 4</code></td><td class="text">Startpunkt in Prozent: linke Kante von links, Unterkante von unten</td></tr>
+      <tr><td><code>timing</code></td><td>0</td><td class="text">Sekunden nach dem Ende der vorigen Szene; negativ = überlappend (siehe unten)</td></tr>
+      <tr><td><code>background</code></td><td><code>/mnt/stick/background/scene-background.jpg</code></td><td class="text">Bild hinter der Szene; <code>none</code> = schwarz</td></tr>
+      <tr><td><code>seed</code></td><td>zufällig</td><td class="text">feste Zufallszahl für das Funkenmuster</td></tr>
+    </table>
+    <div class="screens">
+      <figure><img src="{{ site.baseurl }}/static/img/szene-farbe.png" alt=""><figcaption><code>text: Hallo!</code>, <code>color: 30, 180, 10</code>, <code>starting: 70, 10</code></figcaption></figure>
+    </div>
+
+    <h3 id="sec-bloecke">Szenen-Blöcke und timing</h3>
+    <p>
+      Mehrere <code>scene</code>-Schritte direkt hintereinander bilden einen
+      <strong>Block</strong>: ein gemeinsamer Hintergrund, kein Schwarz dazwischen.
+      Mit <code>timing</code> startet eine Szene relativ zum Ende der vorigen:
+    </p>
+    <ul>
+      <li><code>timing: 0</code> – direkt danach</li>
+      <li><code>timing: 2</code> – 2 Sekunden nur Hintergrund dazwischen</li>
+      <li><code>timing: -3</code> – 3 Sekunden <em>vor</em> dem Ende der vorigen: Der neue Text steigt
+        auf, während die Funken der alten noch verglühen.</li>
+    </ul>
+    <p>
+      Eine Szene beginnt nie vor dem Start der vorigen. Wiederholungen
+      (<code>repeat</code>) folgen direkt aufeinander, <code>timing</code> gilt für die
+      erste. Der Hintergrund des Blocks ist der der ersten Szene, außer eine
+      spätere setzt ihren eigenen <code>background</code>.
+    </p>
+
+    <h2 id="sec-vorrang">Was gilt wann?</h2>
+    <p>Gilt eine Einstellung mehrfach, gewinnt die spätere Stelle:</p>
+    <ol>
+      <li>eingebaute Standardwerte des Programms</li>
+      <li>Standardwerte des Dienstes auf dem Pi (<code>DEFAULT_ARGS</code>: <code>--transitions stack --duration 3 --easing ease-out</code>)</li>
+      <li>mit <code>make config SHOW_ARGS="…"</code> gespeicherte Einstellungen</li>
+      <li><code>show_args</code> in der <code>config.yaml</code></li>
+      <li>die Einstellungen des einzelnen Schritts</li>
+    </ol>
+    <p>
+      <code>transitions: cut</code> in <code>show_args</code> wirkt also genauso wie
+      <code>--transitions cut</code> beim Dienst, und ein Schritt mit
+      <code>transitions: wipe</code> nutzt nur dort <code>wipe</code>.
+    </p>
+
+    <h2 id="sec-pruefen">Prüfen und Fehler</h2>
+    <p>
+      <code>make start</code> und <code>make restart</code> melden eine fehlerhafte
+      Datei sofort mit Grund. Ist sie in Ordnung, sagen sie nichts weiter.
+      <code>make status</code> zeigt im Log, welche Sequenz gelesen wurde.
+      Wird die Datei im laufenden Betrieb fehlerhaft gespeichert, bleibt die
+      letzte gültige Version in Gebrauch.
+    </p>
+    <table>
+      <tr><th>Meldung (Auszug)</th><th class="text">Ursache</th></tr>
+      <tr><td><code>step 1 (scene): argument --starting: expected X,Y in percent, got '-6'</code></td><td class="text">falscher Wert, hier gemeint: <code>timing: -6</code></td></tr>
+      <tr><td><code>'slideshow forever' never ends, so the steps after it would never play</code></td><td class="text">endloser Schritt nicht am Ende: <code>minutes</code> ergänzen</td></tr>
+      <tr><td><code>show_args: Unknown transition: fadee</code></td><td class="text">Tippfehler im Übergang</td></tr>
+      <tr><td><code>step 1 (slideshow): 'gamma' can't be set per step</code></td><td class="text">Display-Einstellung gehört in <code>show_args</code></td></tr>
+      <tr><td><code>cloud: unknown setting: password</code></td><td class="text">das Passwort gehört nicht in die Datei</td></tr>
+      <tr><td><code>not valid YAML: … line 4, column 4</code></td><td class="text">Einrückung stimmt nicht (Zeile 4)</td></tr>
+    </table>
+    <p>Von Hand prüfen (auf dem Pi oder lokal im Quellcode-Ordner):</p>
+    <pre>python3 sequence.py --config config.yaml --check</pre>
+
+    <h2 id="sec-film">Vorschau als Film</h2>
+    <p>
+      Bevor eine neue Sequenz auf den Stick kommt, lässt sie sich als Film
+      ansehen. Er wird mit demselben Programmcode erzeugt und ruckelt etwa so
+      wie das echte Display:
+    </p>
+    <pre>make movie CONFIG=config.yaml          # -> config.mp4
+make movie CONFIG=config.yaml MOVIE_ARGS="--smooth --start 18:30"</pre>
+  </article>
+</section>

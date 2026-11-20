@@ -1,0 +1,4 @@
+baseurl: "/fb-slideshow"
+title: "fb-slideshow"
+exclude:
+  - "*.md"

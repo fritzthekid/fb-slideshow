@@ -11,6 +11,10 @@ is the plain slideshow, exactly as before.
       transitions: stack
       duration: 3
       easing: ease-out
+    cloud:                  # where hydra fetches the pictures (Nextcloud)
+      address: https://cloud.example.org
+      user: diashow
+      folder: bilder
     sequence:
       - scene:              # options as for scene140.py
           text: 140
@@ -36,8 +40,14 @@ relative to the end of the one before (negative: overlapping). The file is read 
 stick take effect without a restart; if it is broken, the error is logged
 and the last good version stays in use.
 
+cloud is read by ci/diashow-sync.sh, not by the show: the
+public address of the Nextcloud, the user and the folder with the pictures.
+The password is not in this file; it stays on hydra's SD card (rclone.conf,
+make diashow-setup).
+
     python3 sequence.py [--config FILE] [fb-slideshow.py options]
     python3 sequence.py --check            # options and config file ok?
+    python3 sequence.py --cloud            # cloud: WebDAV URL, user, folder
 """
 import argparse
 import contextlib
@@ -169,6 +179,43 @@ def show_args_argv(value):
     return argv
 
 
+CLOUD_KEYS = {"address", "user", "folder"}
+
+
+def cloud_settings(value):
+    """config.yaml 'cloud:' -> (WebDAV URL, user, folder) or None.
+        cloud:
+          address: https://cloud.example.org   # public address of the Nextcloud
+          user: diashow                        # the account hydra logs in with
+          folder: bilder                       # folder of that account (default)"""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ConfigError("cloud: expected 'address:', 'user:' and 'folder:' lines")
+    unknown = set(map(str, value)) - CLOUD_KEYS
+    if unknown:
+        raise ConfigError(f"cloud: unknown setting: {', '.join(sorted(unknown))}"
+                          " (address, user, folder; the password is not set here)")
+    address, user = value.get("address"), value.get("user")
+    folder = value.get("folder", "bilder")
+    for name, val in (("address", address), ("user", user), ("folder", folder)):
+        if not isinstance(val, str) or not val.strip() or any(c.isspace() for c in val.strip()):
+            raise ConfigError(f"cloud: {name} must be given, without spaces")
+    address = address.strip().rstrip("/")
+    if "://" not in address:
+        address = "https://" + address
+    if not address.startswith(("https://", "http://")) or "/" in address.split("://", 1)[1]:
+        raise ConfigError("cloud: address is the server only, e.g. https://cloud.example.org")
+    user = user.strip()
+    if "/" in user or ":" in user:
+        raise ConfigError("cloud: user must not contain '/' or ':'")
+    parts = [p for p in folder.strip().split("/") if p]
+    if not parts or any(p in (".", "..") for p in parts):
+        raise ConfigError("cloud: folder must be a folder of the user, e.g. bilder")
+    url = f"{address}/remote.php/dav/files/{user}/"
+    return url, user, "/".join(parts)
+
+
 def display_key(args):
     """The options of a parsed fb-slideshow.py namespace that need a restart."""
     return tuple(repr(getattr(args, k, None)) for k in RESTART_OPTIONS)
@@ -195,12 +242,13 @@ def parse_config(text, base_argv=()):
         raise ConfigError(f"not valid YAML: {e}")
     if not isinstance(data, dict):
         raise ConfigError("expected 'sequence:' with a list of steps")
-    unknown = set(data) - {"loop", "sequence", "show_args"}
+    unknown = set(data) - {"loop", "sequence", "show_args", "cloud"}
     if unknown:
         raise ConfigError(f"unknown setting: {', '.join(sorted(map(str, unknown)))}")
     loop = data.get("loop", True)
     if not isinstance(loop, bool):
         raise ConfigError("loop: must be true or false")
+    cloud_settings(data.get("cloud"))  # checked here, used by diashow-sync.sh
     show_argv = show_args_argv(data.get("show_args"))
     base_argv = [*base_argv, *show_argv]
     _parse(lambda a: fbs.parse_args(a, env={}), list(base_argv), "show_args")
@@ -222,7 +270,7 @@ def parse_config(text, base_argv=()):
         bad = {str(k).replace("-", "_") for k in opts} & (DISPLAY_OPTIONS | NOT_IN_STEPS)
         if bad:
             raise ConfigError(f"{where}: '{sorted(bad)[0]}' can't be set per step "
-                              "(display options go on the command line / SHOW_ARGS)")
+                              "(display options go into show_args)")
         if kind == "slideshow":
             minutes = opts.pop("minutes", None)
             directory = opts.pop("directory", None)  # positional, set after
@@ -419,11 +467,37 @@ def run(display, config_file, overlay, rng, paused=lambda: False,
             return
 
 
+def print_cloud(path):
+    """--cloud: the cloud settings for ci/diashow-sync.sh, one per line (WebDAV
+    URL, user, folder). Exit 0; 1 without a cloud section or file; 2 when it
+    is broken. Only the cloud section is looked at."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f.read())
+    except FileNotFoundError:
+        return 1
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as e:
+        print(f"{path}: {e}", file=sys.stderr)
+        return 2
+    try:
+        cloud = cloud_settings(data.get("cloud") if isinstance(data, dict) else None)
+    except ConfigError as e:
+        print(f"{path}: {e}", file=sys.stderr)
+        return 2
+    if cloud is None:
+        return 1
+    print("\n".join(cloud))
+    return 0
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     ap = argparse.ArgumentParser(add_help=False)
     ap.add_argument("--config", default=os.environ.get("CONFIG", DEFAULT_CONFIG))
+    ap.add_argument("--cloud", action="store_true")
     own, base_argv = ap.parse_known_args(argv)
+    if own.cloud:
+        return print_cloud(own.config)
     if "-h" in base_argv or "--help" in base_argv:
         print(__doc__)
         return 0

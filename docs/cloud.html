@@ -1,0 +1,201 @@
+---
+layout: default
+title: Cloud einrichten
+---
+
+<section>
+  <nav>
+    <ul>
+      <li><a href="{{ site.baseurl }}/">← Übersicht</a></li>
+      <hr>
+      <li><a href="#sec-rollen">Wer macht was?</a></li>
+      <li><a href="#sec-konto">1. Konto und Ordner</a></li>
+      <li><a href="#sec-apppw">2. App-Passwort</a></li>
+      <li><a href="#sec-config">3. Eintrag in config.yaml</a></li>
+      <li><a href="#sec-pi">4. Passwort auf dem Pi</a></li>
+      <li><a href="#sec-abgleich">5. Der Abgleich</a></li>
+      <li><a href="#sec-lieferanten">6. Bildlieferanten</a></li>
+      <li><a href="#sec-sicherheit">Was liegt wo?</a></li>
+      <li><a href="#sec-fehler">Fehlersuche</a></li>
+      <hr>
+      {% include pages.html %}
+    </ul>
+  </nav>
+
+  <article>
+    <h1>Cloud einrichten</h1>
+    <p>
+      Die Bilder kommen aus einer <strong>Nextcloud</strong>. Der Raspberry Pi
+      holt sie selbst ab, sobald er im Netz ist (WLAN, Hotspot, gleich welches).
+      Auf dem Pi läuft dafür kein Dienst, der von außen erreichbar wäre. Wer Bilder
+      beisteuert, braucht weder ein Konto noch eine App, nur einen Link.
+    </p>
+
+    <h2 id="sec-rollen">Wer macht was?</h2>
+    <table>
+      <tr><th>Wer</th><th class="text">Zugang</th><th class="text">Darf</th></tr>
+      <tr><td>Betreiber</td><td class="text">eigenes Nextcloud-Konto, Quellcode, ssh zum Pi</td><td class="text">alles: Ordner, Links, config.yaml, Passwort auf dem Pi</td></tr>
+      <tr><td>Raspberry Pi</td><td class="text">Konto <code>diashow</code> mit App-Passwort</td><td class="text">den Bilderordner lesen (am besten nur lesen)</td></tr>
+      <tr><td>Bildlieferanten</td><td class="text">Upload-Link + Link-Passwort</td><td class="text">nur Bilder hinzufügen; nichts sehen, ändern oder löschen</td></tr>
+    </table>
+
+    <h2 id="sec-konto">1. Konto und Ordner anlegen</h2>
+    <p>
+      Der Pi bekommt ein <strong>eigenes Konto</strong>, z.&nbsp;B. <code>diashow</code>,
+      nicht das persönliche Konto des Betreibers. Geht der Pi verloren, ist nur
+      dieses Konto betroffen.
+    </p>
+    <p><strong>Variante A, einfach:</strong> Als <code>diashow</code> anmelden und einen Ordner
+      <code>bilder</code> anlegen. Mit dem Passwort des Pi ließen sich dann aber auch
+      Bilder in der Cloud löschen (der Pi selbst tut das nie).</p>
+    <p><strong>Variante B, empfohlen:</strong> Der Ordner gehört dem Konto des Betreibers,
+      z.&nbsp;B. <code>Diashow</code>. Er wird mit dem Benutzer <code>diashow</code>
+      <strong>nur lesend</strong> geteilt (Teilen → Benutzer <code>diashow</code> →
+      Berechtigung „Nur lesen“). Beim Konto <code>diashow</code> erscheint er als
+      Ordner <code>Diashow</code>. Ein gestohlenes Pi-Passwort kann so nichts zerstören.</p>
+    <div class="info-box">
+      Nur <code>.jpg</code>/<code>.jpeg</code>-Dateien <em>direkt</em> in diesem
+      Ordner kommen auf den Stick; Unterordner und andere Dateien werden ignoriert.
+    </div>
+
+    <h2 id="sec-apppw">2. App-Passwort für den Pi</h2>
+    <p>
+      Der Pi meldet sich nicht mit dem normalen Passwort an, sondern mit einem
+      <strong>App-Passwort</strong>, das sich jederzeit einzeln widerrufen lässt:
+    </p>
+    <ol>
+      <li>Als <code>diashow</code> anmelden.</li>
+      <li>Persönliche Einstellungen → <em>Sicherheit</em> → <em>Geräte &amp; Sitzungen</em>.</li>
+      <li>App-Name eingeben, z.&nbsp;B. <code>raspberry-pi</code>, dann
+        <em>Neues App-Passwort erstellen</em>.</li>
+      <li>Das angezeigte Passwort (Form <code>xxxxx-xxxxx-xxxxx-xxxxx-xxxxx</code>)
+        gleich in Schritt 4 verwenden. Es wird nur einmal angezeigt.</li>
+    </ol>
+    <div class="warn-box">
+      <strong>Das App-Passwort nie per Mail, Chat, Issue oder Foto weitergeben</strong>
+      und nicht in <code>config.yaml</code> schreiben. Ist es doch einmal
+      herausgegeben worden: in derselben Liste löschen und ein neues erstellen.
+    </div>
+
+    <h2 id="sec-config">3. Adresse und Ordner in config.yaml</h2>
+    <p>
+      Öffentliche Adresse der Nextcloud, Konto und Ordner kommen in den Abschnitt
+      <code>cloud:</code> der <code>config.yaml</code> auf dem Stick:
+    </p>
+    <pre class="yaml">cloud:
+  address: https://cloud.example.org   # die Adresse, die auch im Browser steht
+  user: diashow
+  folder: Diashow                      # Variante A: bilder
+sequence:
+  - slideshow</pre>
+    <p>
+      Daraus wird die WebDAV-Adresse
+      <code>https://cloud.example.org/remote.php/dav/files/diashow/</code>.
+      Ein Wechsel des Ordners oder Servers wirkt beim nächsten Abgleich. Dazu
+      einfach die Datei auf dem Stick ändern, ein Neustart ist nicht nötig.
+    </p>
+
+    <h2 id="sec-pi">4. Passwort auf dem Pi hinterlegen</h2>
+    <p>Einmal, vom Rechner mit dem Quellcode aus:</p>
+    <pre>make diashow-setup</pre>
+    <p>
+      Das öffnet eine ssh-Sitzung zum Pi und fragt nach dem App-Passwort; die
+      Eingabe ist unsichtbar. Adresse und Konto nimmt es aus <code>cloud:</code> in der
+      <code>config.yaml</code>. Fehlt der Abschnitt, fragt es einmal danach.
+      Das Passwort wird verschleiert in <code>~/.config/rclone/rclone.conf</code> auf der
+      <strong>SD-Karte</strong> des Pi gespeichert (nur für den Benutzer lesbar).
+      Danach wird die Anmeldung gleich getestet und der stündliche Abgleich eingeschaltet:
+    </p>
+    <pre>App password for Nextcloud user diashow:
+remote nc: saved in /home/…/.config/rclone/rclone.conf
+remote nc: ok
+diashow-sync.timer enabled</pre>
+    <p>
+      <strong>Neues Passwort</strong> (z.&nbsp;B. nach Widerruf): neues App-Passwort
+      erstellen, <code>make diashow-setup</code> noch einmal ausführen.
+    </p>
+
+    <h2 id="sec-abgleich">5. Der Abgleich</h2>
+    <ul>
+      <li><strong>Wann:</strong> 2 Minuten nach dem Einschalten, dann stündlich.
+        Sofort: <code>make diashow-sync</code>.</li>
+      <li><strong>Was:</strong> Der Ordner auf dem Stick (<code>/mnt/stick/bilder</code>) wird
+        eine genaue Kopie des Cloud-Ordners: Neue Bilder kommen dazu, in der Cloud
+        gelöschte verschwinden. Andere Dateien auf dem Stick bleiben unberührt.</li>
+      <li><strong>Die Show</strong> liest den Ordner jede Runde neu; neue Bilder
+        erscheinen ohne Neustart.</li>
+      <li><strong>Offline:</strong> Der Abgleich bricht ab, bevor er etwas ändert;
+        der nächste versucht es wieder.</li>
+      <li><strong>Ohne Stick:</strong> Es wird nichts getan, damit nichts auf
+        der SD-Karte landet.</li>
+      <li><strong>Löschschutz:</strong> Würde ein Abgleich mehr als 20 Bilder
+        löschen (z.&nbsp;B. weil der Ordner geleert oder die Freigabe entfernt wurde),
+        bricht er ab, ohne etwas zu ändern.</li>
+    </ul>
+    <p><code>make status</code> zeigt das Ergebnis des letzten Abgleichs:</p>
+    <pre>picture sync: sync ok: 61 pictures (2 new, 0 deleted) (next: …)</pre>
+    <div class="info-box">
+      <strong>Ordner gewechselt?</strong> Dann sähe der Abgleich viele Bilder als
+      „gelöscht“ und der Löschschutz greift. Einmalig erlauben:
+      <pre>ssh &lt;pi&gt; 'DIASHOW_MAX_DELETE=1000 ~/fb-slideshow/ci/diashow-sync.sh'</pre>
+    </div>
+
+    <h2 id="sec-lieferanten">6. Bildlieferanten einrichten</h2>
+    <p>
+      Wer Bilder beisteuert, bekommt einen <strong>Upload-Link</strong>
+      („Dateiablage“, englisch <em>File drop</em>) mit eigenem Passwort. Damit kann
+      man im Browser des Handys Bilder hochladen, aber nichts sehen, ändern oder
+      löschen. Ein App-Passwort dafür herauszugeben wäre falsch: Es öffnet das
+      ganze Konto.
+    </p>
+    <ol>
+      <li>Als Eigentümer des Ordners anmelden (Variante A: <code>diashow</code>,
+        Variante B: der Betreiber), den Ordner öffnen, <em>Teilen</em>.</li>
+      <li><em>Link teilen</em> → <em>+</em> (neuen Freigabelink erstellen).</li>
+      <li>In den Einstellungen des Links (⋯):
+        <ul>
+          <li>Berechtigung <strong>„Dateiablage (nur Hochladen)“</strong> (<em>File drop</em>)</li>
+          <li><strong>Passwort festlegen</strong>, ein eigenes, nur für das Hochladen</li>
+          <li>Ablaufdatum nach Wunsch</li>
+          <li>Speichern</li>
+        </ul>
+      </li>
+      <li>Link kopieren. Mit ⋯ → <em>QR-Code anzeigen</em> gibt es ihn auch als
+        QR-Code, den jede Handykamera liest.</li>
+      <li>Den Lieferanten Link und Passwort geben, am besten auf getrennten Wegen,
+        dazu die Anleitung <a href="bilder-hochladen.html">Bilder hochladen</a>.</li>
+    </ol>
+    <table>
+      <tr><th>Aufgabe</th><th class="text">So geht's</th></tr>
+      <tr><td>Passwort ändern</td><td class="text">in den Einstellungen desselben Links; der Link bleibt gleich</td></tr>
+      <tr><td>allen den Zugang sperren</td><td class="text">den Link löschen</td></tr>
+      <tr><td>mehrere Gruppen</td><td class="text">mehrere Links mit je eigenem Passwort, einzeln widerrufbar</td></tr>
+      <tr><td>unerwünschtes Bild</td><td class="text">als Eigentümer in der Cloud löschen; der nächste Abgleich entfernt es vom Stick</td></tr>
+    </table>
+    <p>
+      Falsche Passwörter bremst Nextcloud automatisch aus (Brute-Force-Schutz).
+      Hochgeladene Bilder erscheinen ohne Prüfung spätestens nach einer Stunde
+      auf dem Display.
+    </p>
+
+    <h2 id="sec-sicherheit">Was liegt wo?</h2>
+    <table>
+      <tr><th>Angabe</th><th class="text">Ort</th><th class="text">geheim?</th></tr>
+      <tr><td>Adresse, Konto, Ordner</td><td class="text"><code>cloud:</code> in <code>config.yaml</code> auf dem Stick</td><td class="text">nein</td></tr>
+      <tr><td>App-Passwort des Pi</td><td class="text">SD-Karte des Pi, <code>~/.config/rclone/rclone.conf</code></td><td class="text"><strong>ja</strong>, nur dort</td></tr>
+      <tr><td>Upload-Link + Link-Passwort</td><td class="text">bei den Bildlieferanten</td><td class="text">ja, nur für sie</td></tr>
+      <tr><td>Bilder</td><td class="text">Cloud-Ordner und <code>/mnt/stick/bilder</code></td><td class="text">privat, nie im Quellcode</td></tr>
+    </table>
+
+    <h2 id="sec-fehler">Fehlersuche</h2>
+    <p>Die Meldungen zeigen <code>make diashow-sync</code> und <code>make status</code>:</p>
+    <table>
+      <tr><th>Meldung</th><th class="text">Ursache und Abhilfe</th></tr>
+      <tr><td><code>cannot list nc:… (offline?) - stick unchanged</code></td><td class="text">kein Netz, falsche Adresse/Ordner oder Passwort widerrufen; Adresse im Browser prüfen, ggf. <code>make diashow-setup</code></td></tr>
+      <tr><td><code>would delete 35 of 60 pictures … - aborted</code></td><td class="text">Löschschutz: Ordner leer, gewechselt oder Freigabe entfernt (siehe oben)</td></tr>
+      <tr><td><code>no stick mounted on /mnt/stick - nothing done</code></td><td class="text">Stick fehlt oder ist nicht eingehängt</td></tr>
+      <tr><td><code>cloud: section in … not usable - nothing done</code></td><td class="text">Fehler im Abschnitt <code>cloud:</code>; die Zeile davor nennt den Grund</td></tr>
+      <tr><td><code>remote nc: login failed (wrong password?)</code></td><td class="text">bei <code>make diashow-setup</code>: Passwort falsch abgetippt oder Konto falsch</td></tr>
+    </table>
+  </article>
+</section>

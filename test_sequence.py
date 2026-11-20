@@ -471,3 +471,50 @@ def test_scene_text_per_step():
     cfg = seq.parse_config("sequence:\n  - scene: {text: 140}\n  - scene\n")
     assert [s.args.text for s in cfg.steps] == ["140", "XXX"]
     assert cfg.steps[0].text == "scene 140 x1"
+
+
+# ------------------------------------------------- cloud: in config.yaml
+@pytest.mark.parametrize("value, expected", [
+    ({"address": "https://cloud.example.org", "user": "diashow"},
+     ("https://cloud.example.org/remote.php/dav/files/diashow/", "diashow", "bilder")),
+    ({"address": "cloud.example.org/", "user": "u", "folder": "/A/B/"},
+     ("https://cloud.example.org/remote.php/dav/files/u/", "u", "A/B")),
+    (None, None),
+])
+def test_cloud_settings(value, expected):
+    assert seq.cloud_settings(value) == expected
+
+
+@pytest.mark.parametrize("value, msg", [
+    ({"address": "https://x.org", "user": "u", "password": "p"}, "password is not set here"),
+    ({"user": "u"}, "address must be given"),
+    ({"address": "https://x.org/remote.php", "user": "u"}, "the server only"),
+    ({"address": "ftp://x.org", "user": "u"}, "the server only"),
+    ({"address": "https://x.org", "user": "a/b"}, "must not contain"),
+    ({"address": "https://x.org", "user": "u", "folder": "../x"}, "folder must be"),
+    ("https://x.org", "expected 'address:'"),
+])
+def test_cloud_settings_errors(value, msg):
+    with pytest.raises(seq.ConfigError) as e:
+        seq.cloud_settings(value)
+    assert msg in str(e.value)
+
+
+def test_config_with_cloud_is_valid_and_checked():
+    seq.parse_config("cloud: {address: https://x.org, user: u}\nsequence:\n  - slideshow\n")
+    with pytest.raises(seq.ConfigError):
+        seq.parse_config("cloud: {address: https://x.org}\nsequence:\n  - slideshow\n")
+
+
+def test_main_cloud_prints_the_settings(tmp_path, capsys):
+    cfg = tmp_path / "config.yaml"
+    assert seq.main(["--config", str(cfg), "--cloud"]) == 1  # no file
+    cfg.write_text("sequence:\n  - slideshow\n")
+    assert seq.main(["--config", str(cfg), "--cloud"]) == 1  # no cloud section
+    cfg.write_text("cloud: {address: https://x.org, user: u, folder: f}\n"
+                   "sequence: broken\n")  # only the cloud section counts
+    assert seq.main(["--config", str(cfg), "--cloud"]) == 0
+    assert capsys.readouterr().out.split() == [
+        "https://x.org/remote.php/dav/files/u/", "u", "f"]
+    cfg.write_text("cloud: {user: u}\n")
+    assert seq.main(["--config", str(cfg), "--cloud"]) == 2

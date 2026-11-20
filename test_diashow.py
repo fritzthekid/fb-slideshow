@@ -3,6 +3,7 @@ from a local directory."""
 import os
 import pathlib
 import subprocess
+import sys
 
 import pytest
 
@@ -13,6 +14,10 @@ FAKE_RCLONE = r"""#!/bin/sh
 cmd=$1; shift
 src=$1
 [ -f "$OFFLINE" ] && { echo "offline" >&2; exit 1; }
+case "$src" in nc:*)  # the remote: a folder below $NC_ROOT, settings logged
+  echo "$RCLONE_CONFIG_NC_URL $RCLONE_CONFIG_NC_USER" >"$NC_LOG"
+  src="$NC_ROOT/${src#nc:}" ;;
+esac
 case "$cmd" in
   lsf) ls "$src" | grep -i -E '\.jpe?g$' ;;
   sync) dest=$2
@@ -37,7 +42,8 @@ def env(tmp_path):
     dest.mkdir()
     e = dict(os.environ, RCLONE=str(fake), DIASHOW_SRC=str(src),
              DIASHOW_DEST=str(dest), OFFLINE=str(tmp_path / "offline"),
-             DIASHOW_STICK="")
+             DIASHOW_STICK="", DIASHOW_CONFIG="", PYTHON=sys.executable,
+             NC_ROOT=str(tmp_path / "nc"), NC_LOG=str(tmp_path / "nc.log"))
     return e, src, dest, tmp_path
 
 
@@ -136,7 +142,8 @@ def setup_env(tmp_path):
     fake.chmod(0o755)
     conf = tmp_path / "rclone.conf"
     env = {k: v for k, v in os.environ.items() if not k.startswith("DIASHOW_")}
-    env.update(RCLONE=str(fake), RCLONE_CONF=str(conf), SYSTEMCTL="true")
+    env.update(RCLONE=str(fake), RCLONE_CONF=str(conf), SYSTEMCTL="true",
+               DIASHOW_CONFIG="", PYTHON=sys.executable)
     return env, conf
 
 
@@ -169,3 +176,65 @@ def test_setup_keeps_address_for_a_new_password(setup_env):
     assert f"url = {url}" in text and "user = show" in text
     assert "pass = obscured-pw2" in text and "pw1" not in text
     assert oct(conf.stat().st_mode & 0o777) == "0o600"
+
+
+# cloud: in config.yaml (address, user, folder); the password is not there
+CLOUD_CONFIG = """
+cloud:
+  address: https://cloud.example.org/
+  user: diashow
+  folder: Familie/Diashow
+sequence:
+  - slideshow
+"""
+
+
+def test_cloud_from_config_yaml(env):
+    e, src, dest, tmp = env
+    folder = tmp / "nc" / "Familie" / "Diashow"
+    folder.mkdir(parents=True)
+    pics(folder, ["from-cloud.jpg"])
+    pics(src, ["from-env.jpg"])  # DIASHOW_SRC: not used when config has cloud
+    cfg = tmp / "config.yaml"
+    cfg.write_text(CLOUD_CONFIG)
+    e["DIASHOW_CONFIG"] = str(cfg)
+    r = run(e)
+    assert r.returncode == 0, r.stderr
+    assert names(dest) == ["from-cloud.jpg"]
+    assert (tmp / "nc.log").read_text().split() == [
+        "https://cloud.example.org/remote.php/dav/files/diashow/", "diashow"]
+    assert "cloud from" in r.stdout
+
+
+def test_config_without_cloud_uses_diashow_src(env):
+    e, src, dest, tmp = env
+    pics(src, ["from-env.jpg"])
+    cfg = tmp / "config.yaml"
+    cfg.write_text("sequence:\n  - slideshow\n")
+    e["DIASHOW_CONFIG"] = str(cfg)
+    assert run(e).returncode == 0
+    assert names(dest) == ["from-env.jpg"]
+
+
+def test_broken_cloud_section_nothing_done(env):
+    e, src, dest, tmp = env
+    pics(src, ["a.jpg"])
+    cfg = tmp / "config.yaml"
+    cfg.write_text("cloud:\n  address: https://x.org\n  password: secret\n")
+    e["DIASHOW_CONFIG"] = str(cfg)
+    r = run(e)
+    assert r.returncode == 1 and "nothing done" in r.stderr
+    assert "password is not set here" in r.stderr
+    assert names(dest) == []
+
+
+def test_setup_takes_address_from_config_yaml(setup_env, tmp_path):
+    env, conf = setup_env
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(CLOUD_CONFIG)
+    r = setup(dict(env, DIASHOW_CONFIG=str(cfg)))
+    assert r.returncode == 0, r.stderr
+    text = conf.read_text()
+    assert "url = https://cloud.example.org/remote.php/dav/files/diashow/" in text
+    assert "user = diashow" in text and "pass = obscured-pw1" in text
+    assert "secret" not in cfg.read_text()

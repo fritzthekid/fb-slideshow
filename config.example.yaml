@@ -16,6 +16,10 @@
 # (clock, gamma, ...) restarts the show by itself.
 
 loop: true            # after the last step start again (false: play once)
+# cloud:                # where hydra fetches the pictures (no password here;
+#   address: https://cloud.example.org   # it is on hydra: make diashow-setup)
+#   user: diashow
+#   folder: bilder
 show_args:
   transitions: stack
   duration: 3

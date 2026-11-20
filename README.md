@@ -5,6 +5,10 @@ Raspberry Pi. Shows the `*.jpg` / `*.jpeg` files of a directory in natural
 order, with a hard cut or a transition. Writes directly into the framebuffer
 (mmap), without X11 and without fbi.
 
+**Documentation (German):** <https://fritzthekid.github.io/fb-slideshow/>,
+with how to write `config.yaml` (and many examples), how to set up the
+Nextcloud and how picture providers upload (source in `docs/`).
+
 ## Requirements
 
 - Raspberry Pi with SPI TFT, framebuffer `/dev/fb1`
@@ -350,8 +354,8 @@ make movie CONFIG=other.yaml MOVIE=other.mp4 MOVIE_ARGS="--smooth --seed 3"
 ## Pictures from Nextcloud
 
 hydra fetches the pictures itself (issue #25): the `.jpg`/`.jpeg` files in
-the Nextcloud folder `bilder` of the user `diashow` (an account of its own)
-become an exact copy in `/mnt/stick/bilder`. New
+a Nextcloud folder (by default `bilder` of the user `diashow`, an account of
+its own) become an exact copy in `/mnt/stick/bilder`. New
 pictures are fetched, deleted ones removed from the stick; other files there
 stay untouched. Nothing listens on hydra: it pulls over WebDAV whenever it is
 online (any network), with `rclone`.
@@ -374,6 +378,20 @@ online (any network), with `rclone`.
   ```
   UUID=6AD7-EA73  /mnt/stick  exfat  defaults,nofail,uid=1000,gid=1000,x-systemd.automount,x-systemd.device-timeout=5s  0  0
   ```
+- **Where from:** the `cloud:` section of `config.yaml` on the stick: the
+  public address, the user and the folder (no password):
+
+  ```yaml
+  cloud:
+    address: https://cloud.example.org
+    user: diashow
+    folder: bilder        # default
+  ```
+
+  It wins over `DIASHOW_SRC` in the service; without it, the folder of
+  `DIASHOW_SRC` with the address stored by `make diashow-setup` is used. A
+  broken `cloud:` section stops the sync (nothing done) and is reported by
+  `make start` like any other error in the file.
 - **Login:** the app password of `diashow` (revocable in Nextcloud under
   Settings → Security), stored obscured in `~/.config/rclone/rclone.conf` on
   hydra as the remote `nc`. The Nextcloud address and user are kept there as
@@ -387,8 +405,8 @@ make diashow-sync      # fetch now, with the log of the run
 make status            # "picture sync: sync ok: 59 pictures (0 new, 0 deleted) (next: ...)"
 ```
 
-Folder and target are set in `ci/diashow-sync.service`
-(`DIASHOW_SRC=nc:bilder`, `DIASHOW_DEST`). rclone itself: `sudo apt install
+The fallback folder and the target are set in `ci/diashow-sync.service`
+(`DIASHOW_SRC=nc:bilder`, `DIASHOW_DEST`, `DIASHOW_CONFIG`). rclone itself: `sudo apt install
 rclone` on hydra. On hydra: `systemctl --user list-timers`,
 `journalctl --user-unit diashow-sync`.
 
@@ -413,7 +431,9 @@ Set it up once in the Nextcloud web interface, logged in as `diashow`:
    - no expiration date (or set one);
    - **Save**.
 3. Copy the link and send link and password to the people who should add
-   pictures, together with [docs/upload-pictures.md](docs/upload-pictures.md).
+   pictures, together with the guide
+   <https://fritzthekid.github.io/fb-slideshow/bilder-hochladen.html> (German,
+   source `docs/bilder-hochladen.html`).
    It explains the upload step by step for a phone. Nextcloud can also show
    the link as a QR code (⋯ → *Show QR code*), which phone cameras read
    directly.
