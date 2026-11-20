@@ -7,7 +7,9 @@ order, with a hard cut or a transition. Writes directly into the framebuffer
 
 **Documentation (German):** <https://fritzthekid.github.io/fb-slideshow/>,
 with how to write `config.yaml` (and many examples), how to set up the
-Nextcloud and how picture providers upload (source in `docs/`).
+Nextcloud and how picture providers upload (source in `docs/`, published by
+the workflow `.github/workflows/pages.yml` on every push to `main` that
+changes `docs/`).
 
 ## Requirements
 
