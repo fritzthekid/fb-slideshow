@@ -682,20 +682,31 @@ def make_transition(name, rng, size):
     return run
 
 
+# The SPI display (15 MHz, 480x320 at 16 bit = 2.5 Mbit per frame) shows
+# about 6 full frames per second. Frames computed faster are never seen and
+# only cost CPU (and power): transitions are limited to MAX_FPS.
+MAX_FPS = 8
+
+
 def run_transition(display, fn, a, b, duration, clock=time.monotonic,
-                   easing=_smooth):
+                   easing=_smooth, sleep=time.sleep, max_fps=MAX_FPS):
     """Time-driven: each frame shows the state for the current time, so slow
-    frames are skipped instead of stretching the transition. The SPI bandwidth
-    decides how many frames there will be."""
+    frames are skipped instead of stretching the transition. At most max_fps
+    frames per second are computed; the time left of a frame is slept."""
     if duration <= 0:
         display.show(b)
         return
-    t0 = clock()
+    t0 = due = clock()
     while True:
-        p = (clock() - t0) / duration
+        now = clock()
+        if now < due:  # faster than max_fps: wait for the next frame
+            sleep(due - now)
+            now = due
+        p = (now - t0) / duration
         if p >= 1:
             break
         display.show(fn(a, b, easing(max(p, 0.0))))
+        due = now + 1 / max_fps
     display.show(b)
 
 
@@ -913,7 +924,8 @@ def slideshow(display, paths, hold, duration, fill, transitions, rng,
                 last = rng.choice(choices)
                 fn = make_transition(last, rng, size)
                 run_transition(display, fn, prev, img,
-                               0 if last == "cut" else duration, clock, easing)
+                               0 if last == "cut" else duration, clock, easing,
+                               sleep)
                 prev, prev_path = img, path
             wait(hold)
             while paused():  # image stays until the next SIGUSR1 arrives
@@ -956,7 +968,7 @@ def _pile_show(display, submit, prev, hold, duration, rng, easing, wait,
     frame = rest(top, under)
     # whatever is on the display slides off the pile
     run_transition(display, make_transition("stack", rng, size), prev, frame,
-                   duration, clock, easing)
+                   duration, clock, easing, sleep)
     while True:
         wait(hold)
         while paused():
@@ -974,7 +986,7 @@ def _pile_show(display, submit, prev, hold, duration, rng, easing, wait,
         nxt = rest(under, new)
         fn = make_pile_transition(rng, size, top[1], under[1], under[2],
                                   *(new[1:] if new else (None, None)))
-        run_transition(display, fn, frame, nxt, duration, clock, easing)
+        run_transition(display, fn, frame, nxt, duration, clock, easing, sleep)
         top, under, frame = under, new, nxt
 
 
