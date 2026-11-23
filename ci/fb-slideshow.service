@@ -29,7 +29,10 @@ Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 SHOW_ARGS=
 Environment="DEFAULT_ARGS=--transitions stack --duration 3 --easing ease-out"
 EnvironmentFile=-%h/.config/fb-slideshow/env
 ExecStart=/usr/bin/python3 %h/fb-slideshow/sequence.py $DEFAULT_ARGS $SHOW_ARGS
-# exit code 2 = framebuffer not readable yet; SIGTERM exits cleanly with 0
+# Restarted after every error (exit code != 0, crash, killed by a signal
+# other than SIGTERM): exit code 2 = framebuffer not readable yet, 3 = display
+# options changed. Not restarted after "make stop" / systemctl stop (SIGTERM
+# exits cleanly with 0) or when a config with "loop: false" has finished.
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=15

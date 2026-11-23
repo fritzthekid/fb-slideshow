@@ -533,8 +533,10 @@ def main(argv=None):
     except RestartNeeded:
         fbs.log(f"{own.config}: display options in show_args changed - restarting")
         return RESTART_EXIT
-    except (KeyboardInterrupt, SystemExit):
+    except KeyboardInterrupt:
         pass
+    except SystemExit as e:  # SIGTERM -> 0 (stopped), anything else = error
+        return fbs.exit_code(e)
     finally:
         display.blank()
         display.close()

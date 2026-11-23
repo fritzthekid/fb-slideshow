@@ -467,6 +467,30 @@ def test_main_exits_for_a_restart_when_display_options_change(tmp_path, monkeypa
     assert calls[0][seq.RESTART_OPTIONS.index("clock")] == repr(base.clock)
 
 
+@pytest.mark.parametrize("code, expected", [(0, 0), (None, 0), (2, 2), ("boom", 1)])
+def test_main_passes_on_the_exit_code_so_systemd_restarts_after_errors(
+        tmp_path, monkeypatch, code, expected):
+    # SIGTERM (stop) raises SystemExit(0) -> 0, no restart; an error that
+    # ends with sys.exit(<code>) must not be turned into 0 (Restart=on-failure)
+    d = pictures(tmp_path, 2)
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("sequence:\n  - slideshow: {hold: 0}\n")
+    fb = tmp_path / "fb"
+    fb.write_bytes(b"")
+
+    def fake_run(*a, **kw):
+        raise SystemExit(code)
+    monkeypatch.setattr(seq, "run", fake_run)
+    assert seq.main(["--config", str(cfg), str(d), "--fb", str(fb), "--size",
+                     f"{W}x{H}", "--invert", "off", "--no-clock"]) == expected
+    assert fb.read_bytes() == b"\x00" * (W * H * 2)  # display blanked
+
+
+def test_service_restarts_only_after_errors():
+    unit = (HERE / "ci" / "fb-slideshow.service").read_text()
+    assert "Restart=on-failure" in unit and "StartLimitIntervalSec=0" in unit
+
+
 def test_scene_text_per_step():
     cfg = seq.parse_config("sequence:\n  - scene: {text: 140}\n  - scene\n")
     assert [s.args.text for s in cfg.steps] == ["140", "XXX"]
