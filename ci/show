@@ -1,0 +1,16 @@
+#!/bin/sh
+# show <command>: controls the slideshow for every user on the Pi, e.g.
+# "show status", "show restart" (commands: see show.sh).
+#
+# The show is a systemd user service of the account that runs it (OWNER), so
+# show.sh has to run as that account: directly for OWNER, for everyone else
+# through sudo (members of the group "slideshow", see setup-show.sh).
+# setup-show.sh installs this file as /usr/local/bin/show with the two
+# placeholders below filled in.
+SCRIPT=@SCRIPT@
+OWNER=@OWNER@
+SUDO=${SUDO:-sudo}
+
+[ "$(id -un)" = "$OWNER" ] && exec "$SCRIPT" "$@"
+# -n: no password prompt; without the sudo rule it fails with a message
+exec $SUDO -n -u "$OWNER" "$SCRIPT" "$@"

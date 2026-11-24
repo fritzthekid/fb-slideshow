@@ -96,6 +96,19 @@ title: Übersicht
       <tr><td><code>make movie</code></td><td class="text">die Sequenz als Film rendern, um sie vorher anzusehen</td></tr>
       <tr><td><code>make diashow-setup</code></td><td class="text">App-Passwort der Cloud auf dem Pi hinterlegen (nur auf der SD-Karte)</td></tr>
       <tr><td><code>make diashow-sync</code></td><td class="text">Bilder jetzt aus der Cloud holen</td></tr>
+      <tr><td><code>make show-setup USERS="richard"</code></td><td class="text">weiteren Benutzern auf dem Pi den Befehl <code>show</code> geben (siehe unten)</td></tr>
     </table>
+
+    <h3>Direkt am Pi: <code>show</code></h3>
+    <p>Auf dem Pi selbst geht dasselbe ohne den Rechner mit dem Quellcode:
+      <code>show status</code>, <code>show start</code>, <code>show stop</code>,
+      <code>show restart</code>, <code>show pause</code>, <code>show resume</code>,
+      <code>show diashow-sync</code>.</p>
+    <p>Wer <code>show</code> benutzen darf, ist Mitglied der Gruppe
+      <code>slideshow</code>. Eingerichtet wird das einmal mit
+      <code>make show-setup USERS="richard"</code>; weitere Benutzer kommen mit
+      <code>sudo usermod -aG slideshow &lt;name&gt;</code> dazu und können
+      <code>show</code> nach dem nächsten Anmelden benutzen. Mehr als die Diashow
+      steuern können sie damit nicht.</p>
   </article>
 </section>

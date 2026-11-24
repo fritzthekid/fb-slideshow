@@ -53,7 +53,7 @@ DEPLOY_FILES := fb-slideshow.py test_fb_slideshow.py requirements.txt \
 SCENE_ARGS ?=
 VERSIONS := import sys, numpy, PIL; print(sys.version.split()[0], numpy.__version__, PIL.__version__)
 
-.PHONY: test deploy test-hydra start stop restart pause resume status config sequence measure-fps scene scene-preview movie diashow-setup diashow-sync ci clean hydra-host
+.PHONY: test deploy test-hydra start stop restart pause resume status config sequence measure-fps scene scene-preview movie diashow-setup diashow-sync show-setup ci clean hydra-host
 
 $(VENV)/.stamp: requirements-ci.txt
 	$(UV) venv -q --clear --python $(PYTHON_VERSION) $(VENV)
@@ -72,8 +72,8 @@ deploy:
 		$(SCP) fonts/Ubuntu.ttf fonts/LICENCE.txt $(HYDRA):$(DEPLOY_DIR)/fonts/
 	$(SCP) ci/show.sh ci/fb-slideshow.service ci/measure_fps.py \
 		ci/diashow-sync.sh ci/diashow-sync.service ci/diashow-sync.timer \
-		ci/diashow-setup.sh $(HYDRA):$(DEPLOY_DIR)/ci/
-	$(SSH) $(HYDRA) 'chmod +x $(DEPLOY_DIR)/ci/*.sh && $(DEPLOY_DIR)/ci/show.sh install'
+		ci/diashow-setup.sh ci/show ci/setup-show.sh $(HYDRA):$(DEPLOY_DIR)/ci/
+	$(SSH) $(HYDRA) 'chmod +x $(DEPLOY_DIR)/ci/*.sh $(DEPLOY_DIR)/ci/show && $(DEPLOY_DIR)/ci/show.sh install'
 	@echo "deployed to $(HYDRA):$(DEPLOY_DIR)"
 
 test-hydra: $(VENV)/.stamp
@@ -121,6 +121,12 @@ diashow-setup:
 
 diashow-sync:
 	@$(SSH) $(HYDRA) '$(DEPLOY_DIR)/ci/show.sh diashow-sync'
+
+# "show <command>" for other users on hydra (asks for eduard's sudo password
+# there); more users later: sudo usermod -aG slideshow <name>
+USERS ?=
+show-setup:
+	$(SSH) -t $(HYDRA) 'sudo sh $(DEPLOY_DIR)/ci/setup-show.sh $(USERS)'
 
 # the sequence of CONFIG as a movie, offline (issue #23); pictures and
 # background from bilder/ and background/ here; SHOW_ARGS as on hydra

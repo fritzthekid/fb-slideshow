@@ -512,10 +512,35 @@ used; `make deploy HYDRA=<address>` forces one.
 | `make sequence` | upload the local `config.yaml` (`CONFIG=` another file), check it on hydra and make it the sequence, replacing `/mnt/stick/config.yaml`; see [Sequence](#sequence-configyaml) |
 | `make scene` / `make scene-preview` | play the scene on hydra (the show stays stopped) / render it to a GIF |
 | `make diashow-setup` / `make diashow-sync` | set up the picture sync from Nextcloud (asks for the app password on hydra) / fetch now, see [Pictures from Nextcloud](#pictures-from-nextcloud) |
+| `make show-setup USERS="richard"` | lets other users on hydra control the show with `show <command>`, see [On hydra itself](#on-hydra-itself) |
 | `make movie` | the sequence of `config.yaml` as a movie (`config.mp4`), offline, see [Movie of a sequence](#movie-of-a-sequence) |
 | `make measure-fps` | frame rate of transitions on the real panel (stops the show meanwhile) |
 | `make ci` | test + deploy + test-hydra + restart |
 | `make hydra-host` | which address of hydra is used |
+
+### On hydra itself
+
+The `make` targets run on itaka and call `ci/show.sh` on hydra over ssh. On
+hydra the same commands work directly, without itaka:
+
+```bash
+~/fb-slideshow/ci/show.sh status        # start, stop, restart, pause, resume,
+                                        # status, config, sequence, diashow-sync
+```
+
+The show is a systemd user service of eduard, so `show.sh` has to run as
+eduard. For other users on hydra, `make show-setup USERS="richard"` (asks for
+eduard's sudo password on hydra; or there: `sudo sh ~/fb-slideshow/ci/setup-show.sh richard`) installs
+
+- `/usr/local/bin/show`: `show status`, `show restart`, ... for everyone; it
+  runs `show.sh` directly for eduard and through `sudo -u eduard` for others,
+- `/etc/sudoers.d/fb-slideshow-show`: members of the group `slideshow` may run
+  `show.sh` (only that) as eduard without a password,
+
+and adds the users to the group `slideshow` (active after their next login).
+More users later: `sudo usermod -aG slideshow <name>`. `/home/eduard` stays
+closed; for `show sequence <file>` the file must be readable by eduard (e.g. on
+the stick).
 
 GitHub Actions runs the same steps on a self-hosted runner on itaka: the
 tests on every push to a branch, and on pushes to `main` also deploy and
