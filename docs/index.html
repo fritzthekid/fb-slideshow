@@ -57,8 +57,9 @@ title: Übersicht
         Abschnitt <code>cloud:</code> der <code>config.yaml</code>. Das
         <strong>Passwort</strong> liegt nur auf der SD-Karte des Raspberry Pi,
         nie auf dem Stick. Siehe <a href="cloud.html">Cloud einrichten</a>.</li>
-      <li><strong>Abgleich</strong>: Zwei Minuten nach dem Einschalten und
-        danach stündlich holt der Pi neue Bilder aus der Cloud auf den Stick.
+      <li><strong>Abgleich</strong> (mit <code>pull: true</code> in <code>cloud:</code>):
+        Zwei Minuten nach dem Einschalten und danach stündlich holt der Pi neue
+        Bilder aus der Cloud auf den Stick.
         Bilder, die in der Cloud gelöscht wurden, verschwinden auch vom Stick.</li>
       <li><strong>Bildlieferanten</strong> bekommen nur einen Upload-Link mit
         eigenem Passwort. Sie können Bilder hinzufügen, aber nichts sehen oder

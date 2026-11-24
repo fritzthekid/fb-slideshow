@@ -10,10 +10,18 @@
 # Run by diashow-sync.service (timer: 2 min after boot, then hourly); offline
 # it fails before touching the stick, the next run tries again.
 #
-# Where from: the "cloud:" section of config.yaml on the stick (public
-# address, user, folder), else $DIASHOW_SRC with the address stored in the
-# rclone remote "nc". The password is only in rclone.conf on the SD card
-# (make diashow-setup).
+# Only one way: cloud -> stick. Nothing is uploaded; a picture that is only
+# on the stick (not in the cloud folder) is deleted from the stick.
+#
+# Off unless config.yaml on the stick says so (default: nothing is fetched):
+#   cloud:
+#     address: https://cloud.example.org   # public address
+#     user: diashow
+#     folder: bilder
+#     pull: true
+# The password is only in rclone.conf on the SD card (make diashow-setup).
+# With DIASHOW_CONFIG empty, config.yaml is not read and $DIASHOW_SRC is
+# fetched (tests, by hand).
 set -euf  # -f: the filter patterns are not file names
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -37,21 +45,27 @@ if [ -n "$STICK" ]; then
     fi
 fi
 
-# cloud: from config.yaml wins over DIASHOW_SRC (rclone reads RCLONE_CONFIG_NC_*
-# as settings of the remote "nc", in front of rclone.conf)
-if [ -n "$CONFIG" ] && [ -f "$CONFIG" ]; then
+# cloud: from config.yaml (rclone reads RCLONE_CONFIG_NC_* as settings of the
+# remote "nc", in front of rclone.conf)
+if [ -n "$CONFIG" ]; then
     rc=0
     cloud=$("$PYTHON" "$HERE/../sequence.py" --config "$CONFIG" --cloud) || rc=$?
-    if [ "$rc" -eq 0 ]; then
-        RCLONE_CONFIG_NC_URL=$(printf '%s\n' "$cloud" | sed -n 1p)
-        RCLONE_CONFIG_NC_USER=$(printf '%s\n' "$cloud" | sed -n 2p)
-        export RCLONE_CONFIG_NC_URL RCLONE_CONFIG_NC_USER
-        SRC="nc:$(printf '%s\n' "$cloud" | sed -n 3p)"
-        echo "cloud from $CONFIG: $RCLONE_CONFIG_NC_URL $SRC"
-    elif [ "$rc" -ne 1 ]; then
+    if [ "$rc" -eq 1 ]; then
+        echo "pull-down off: no cloud: section in $CONFIG - nothing done"
+        exit 0
+    elif [ "$rc" -ne 0 ]; then
         echo "error: cloud: section in $CONFIG not usable - nothing done" >&2
         exit 1
     fi
+    if [ "$(printf '%s\n' "$cloud" | sed -n 4p)" != true ]; then
+        echo "pull-down off (cloud: pull: true in $CONFIG switches it on) - nothing done"
+        exit 0
+    fi
+    RCLONE_CONFIG_NC_URL=$(printf '%s\n' "$cloud" | sed -n 1p)
+    RCLONE_CONFIG_NC_USER=$(printf '%s\n' "$cloud" | sed -n 2p)
+    export RCLONE_CONFIG_NC_URL RCLONE_CONFIG_NC_USER
+    SRC="nc:$(printf '%s\n' "$cloud" | sed -n 3p)"
+    echo "cloud from $CONFIG: $RCLONE_CONFIG_NC_URL $SRC"
 fi
 
 # only pictures in the folder itself, any case (.jpg .JPG .jpeg ...)

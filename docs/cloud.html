@@ -86,6 +86,7 @@ title: Cloud einrichten
   address: https://cloud.example.org   # die Adresse, die auch im Browser steht
   user: diashow
   folder: Diashow                      # Variante A: bilder
+  pull: true                           # Bilder auf den Stick holen (Standard: false)
 sequence:
   - slideshow</pre>
     <p>
@@ -94,6 +95,13 @@ sequence:
       Ein Wechsel des Ordners oder Servers wirkt beim nächsten Abgleich. Dazu
       einfach die Datei auf dem Stick ändern, ein Neustart ist nicht nötig.
     </p>
+    <div class="warn-box">
+      <strong>Ohne <code>pull: true</code> wird nichts geholt.</strong> Der Abgleich
+      ist ausgeschaltet, solange <code>pull: true</code> nicht im Abschnitt
+      <code>cloud:</code> steht (auch ohne <code>cloud:</code> oder ohne
+      <code>config.yaml</code>). So lässt er sich jederzeit auf dem Stick an- und
+      abschalten: <code>pull: false</code> oder die Zeile löschen.
+    </div>
 
     <h2 id="sec-pi">4. Passwort auf dem Pi hinterlegen</h2>
     <p>Einmal, vom Rechner mit dem Quellcode aus:</p>
@@ -104,7 +112,8 @@ sequence:
       <code>config.yaml</code>. Fehlt der Abschnitt, fragt es einmal danach.
       Das Passwort wird verschleiert in <code>~/.config/rclone/rclone.conf</code> auf der
       <strong>SD-Karte</strong> des Pi gespeichert (nur für den Benutzer lesbar).
-      Danach wird die Anmeldung gleich getestet und der stündliche Abgleich eingeschaltet:
+      Danach wird die Anmeldung gleich getestet und der stündliche Abgleich eingeschaltet
+      (er holt nur etwas mit <code>pull: true</code>):
     </p>
     <pre>App password for Nextcloud user diashow:
 remote nc: saved in /home/…/.config/rclone/rclone.conf
@@ -119,9 +128,15 @@ diashow-sync.timer enabled</pre>
     <ul>
       <li><strong>Wann:</strong> 2 Minuten nach dem Einschalten, dann stündlich.
         Sofort: <code>make diashow-sync</code>.</li>
+      <li><strong>Nur mit <code>pull: true</code></strong> in <code>cloud:</code>; sonst
+        meldet der Lauf „pull-down off“ und tut nichts.</li>
       <li><strong>Was:</strong> Der Ordner auf dem Stick (<code>/mnt/stick/bilder</code>) wird
         eine genaue Kopie des Cloud-Ordners: Neue Bilder kommen dazu, in der Cloud
         gelöschte verschwinden. Andere Dateien auf dem Stick bleiben unberührt.</li>
+      <li><strong>Nur in eine Richtung:</strong> Cloud → Stick. Es wird nichts
+        hochgeladen. Ein Bild, das nur auf dem Stick liegt (selbst
+        dorthin kopiert), wird beim nächsten Abgleich <strong>gelöscht</strong>.
+        Eigene Bilder also in die Cloud legen, nicht auf den Stick.</li>
       <li><strong>Die Show</strong> liest den Ordner jede Runde neu; neue Bilder
         erscheinen ohne Neustart.</li>
       <li><strong>Offline:</strong> Der Abgleich bricht ab, bevor er etwas ändert;

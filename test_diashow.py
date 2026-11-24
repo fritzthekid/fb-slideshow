@@ -184,6 +184,7 @@ cloud:
   address: https://cloud.example.org/
   user: diashow
   folder: Familie/Diashow
+  pull: true
 sequence:
   - slideshow
 """
@@ -206,14 +207,52 @@ def test_cloud_from_config_yaml(env):
     assert "cloud from" in r.stdout
 
 
-def test_config_without_cloud_uses_diashow_src(env):
+@pytest.mark.parametrize("config", [
+    None,                                        # no config.yaml on the stick
+    "sequence:\n  - slideshow\n",                # no cloud: section
+    CLOUD_CONFIG.replace("  pull: true\n", ""),  # pull not given: default off
+    CLOUD_CONFIG.replace("pull: true", "pull: false"),
+])
+def test_pull_down_is_off_unless_config_says_pull_true(env, config):
     e, src, dest, tmp = env
     pics(src, ["from-env.jpg"])
+    folder = tmp / "nc" / "Familie" / "Diashow"
+    folder.mkdir(parents=True)
+    pics(folder, ["from-cloud.jpg"])
+    pics(dest, ["only-on-the-stick.jpg"])  # would be deleted by a pull-down
     cfg = tmp / "config.yaml"
-    cfg.write_text("sequence:\n  - slideshow\n")
+    if config is not None:
+        cfg.write_text(config)
+    e["DIASHOW_CONFIG"] = str(cfg)
+    r = run(e)
+    assert r.returncode == 0, r.stderr
+    assert "pull-down off" in r.stdout and "nothing done" in r.stdout
+    assert names(dest) == ["only-on-the-stick.jpg"]
+    assert not (tmp / "nc.log").exists()  # the cloud was not even asked
+
+
+def test_pull_down_removes_pictures_only_on_the_stick(env):
+    # one way only: cloud -> stick; nothing is uploaded
+    e, src, dest, tmp = env
+    folder = tmp / "nc" / "Familie" / "Diashow"
+    folder.mkdir(parents=True)
+    pics(folder, ["from-cloud.jpg"])
+    pics(dest, ["only-on-the-stick.jpg"])
+    cfg = tmp / "config.yaml"
+    cfg.write_text(CLOUD_CONFIG)
     e["DIASHOW_CONFIG"] = str(cfg)
     assert run(e).returncode == 0
-    assert names(dest) == ["from-env.jpg"]
+    assert names(dest) == ["from-cloud.jpg"]
+    assert names(folder) == ["from-cloud.jpg"]
+
+
+def test_pull_must_be_true_or_false(env):
+    e, src, dest, tmp = env
+    cfg = tmp / "config.yaml"
+    cfg.write_text(CLOUD_CONFIG.replace("pull: true", "pull: ja"))
+    e["DIASHOW_CONFIG"] = str(cfg)
+    r = run(e)
+    assert r.returncode == 1 and "pull must be true or false" in r.stderr
 
 
 def test_broken_cloud_section_nothing_done(env):

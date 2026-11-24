@@ -493,11 +493,18 @@ def test_cloud_settings(value, expected):
     ({"address": "https://x.org", "user": "a/b"}, "must not contain"),
     ({"address": "https://x.org", "user": "u", "folder": "../x"}, "folder must be"),
     ("https://x.org", "expected 'address:'"),
+    ({"address": "https://x.org", "user": "u", "pull": "yes"}, "pull must be true or false"),
 ])
 def test_cloud_settings_errors(value, msg):
     with pytest.raises(seq.ConfigError) as e:
         seq.cloud_settings(value)
     assert msg in str(e.value)
+
+
+def test_cloud_pull_is_off_by_default():
+    assert seq.cloud_pull({"address": "https://x.org", "user": "u"}) is False
+    assert seq.cloud_pull({"address": "https://x.org", "user": "u", "pull": True}) is True
+    assert seq.cloud_pull(None) is False
 
 
 def test_config_with_cloud_is_valid_and_checked():
@@ -515,6 +522,9 @@ def test_main_cloud_prints_the_settings(tmp_path, capsys):
                    "sequence: broken\n")  # only the cloud section counts
     assert seq.main(["--config", str(cfg), "--cloud"]) == 0
     assert capsys.readouterr().out.split() == [
-        "https://x.org/remote.php/dav/files/u/", "u", "f"]
+        "https://x.org/remote.php/dav/files/u/", "u", "f", "false"]  # pull: default off
+    cfg.write_text("cloud: {address: https://x.org, user: u, pull: true}\n")
+    assert seq.main(["--config", str(cfg), "--cloud"]) == 0
+    assert capsys.readouterr().out.split()[-1] == "true"
     cfg.write_text("cloud: {user: u}\n")
     assert seq.main(["--config", str(cfg), "--cloud"]) == 2

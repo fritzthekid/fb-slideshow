@@ -51,6 +51,7 @@ cloud:                     # woher die Bilder kommen (ohne Passwort!)
   address: https://cloud.example.org
   user: diashow
   folder: bilder
+  pull: true               # Bilder holen (Standard: false)
 
 sequence:                  # was nacheinander gezeigt wird
   - scene:
@@ -128,12 +129,14 @@ sequence:                  # was nacheinander gezeigt wird
     <pre class="yaml">cloud:
   address: https://cloud.example.org   # öffentliche Adresse der Nextcloud
   user: diashow                        # Konto, mit dem sich der Pi anmeldet
-  folder: bilder                       # Ordner dieses Kontos (Standard: bilder)</pre>
+  folder: bilder                       # Ordner dieses Kontos (Standard: bilder)
+  pull: true                           # Bilder auf den Stick holen (Standard: false)</pre>
     <table>
       <tr><th>Einstellung</th><th>Standard</th><th class="text">Bedeutung</th></tr>
       <tr><td><code>address</code></td><td>–</td><td class="text">nur der Server, z.&nbsp;B. <code>https://cloud.example.org</code> (ohne <code>https://</code> wird es ergänzt)</td></tr>
       <tr><td><code>user</code></td><td>–</td><td class="text">Benutzername des Kontos in der Nextcloud</td></tr>
       <tr><td><code>folder</code></td><td><code>bilder</code></td><td class="text">Ordner in diesem Konto, auch tiefer: <code>Familie/Diashow</code></td></tr>
+      <tr><td><code>pull</code></td><td><code>false</code></td><td class="text"><code>true</code>: stündlich die Bilder des Ordners auf den Stick holen (nur Cloud → Stick; Bilder, die nur auf dem Stick liegen, werden dabei gelöscht). <code>false</code>: nichts holen.</td></tr>
     </table>
     <div class="warn-box">
       <strong>Kein Passwort in die config.yaml!</strong> Der Stick wird
@@ -142,8 +145,8 @@ sequence:                  # was nacheinander gezeigt wird
       <code>password:</code> wird abgelehnt. Mehr unter <a href="cloud.html">Cloud einrichten</a>.
     </div>
     <p>
-      Ohne <code>cloud:</code> holt der Pi die Bilder von dort, wo sie bei
-      <code>make diashow-setup</code> eingerichtet wurden.
+      Ohne <code>cloud:</code> oder ohne <code>pull: true</code> holt der Pi keine
+      Bilder; die Show zeigt, was auf dem Stick liegt.
     </p>
 
     <h2 id="sec-sequence">sequence – die Schritte</h2>

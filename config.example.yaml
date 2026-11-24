@@ -20,6 +20,7 @@ loop: true            # after the last step start again (false: play once)
 #   address: https://cloud.example.org   # it is on hydra: make diashow-setup)
 #   user: diashow
 #   folder: bilder
+#   pull: true          # fetch the pictures onto the stick (default false)
 show_args:
   transitions: stack
   duration: 3
