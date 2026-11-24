@@ -52,3 +52,9 @@ def test_nothing_private_in_the_docs():
     assert not re.search(r"(\w{5}-){4}\w{5}", text.replace("xxxxx-xxxxx-xxxxx-xxxxx-xxxxx", ""))
     for addr in re.findall(r"https?://([\w.-]+)", text):
         assert addr in ("cloud.example.org", "github.com", "fritzthekid.github.io"), addr
+
+
+def test_layout_has_the_favicon():
+    layout = (DOCS / "_layouts" / "default.html").read_text()
+    assert '<link rel="icon" href="{{ site.baseurl }}/static/favicon.ico"' in layout
+    assert (DOCS / "static" / "favicon.ico").read_bytes()[:4] == b"\x00\x00\x01\x00"
