@@ -790,6 +790,31 @@ def test_run_transition_slow_frames_do_not_stretch_duration():
     assert t[0] == pytest.approx(2.1) and np.array_equal(d.frames[-1], noise(2))
 
 
+def test_run_transition_is_limited_to_max_fps():
+    """Frames that take no time: the rest of each 1/max_fps is slept, so a
+    2 s transition has about 2 * max_fps frames instead of thousands."""
+    t = [0.0]
+    slept = []
+
+    def sleep(s):
+        slept.append(s)
+        t[0] += s
+    seen = []
+    d = FakeDisplay()
+    fbs.run_transition(d, lambda a, b, p: seen.append(p) or a, noise(1), noise(2),
+                       2.0, clock=lambda: t[0], easing=fbs.EASINGS["linear"],
+                       sleep=sleep, max_fps=10)
+    assert len(seen) == 20  # p = 0, 0.05, ... 0.95
+    assert seen == [pytest.approx(i / 20) for i in range(20)]
+    assert all(s == pytest.approx(0.1) for s in slept)
+    assert t[0] == pytest.approx(2.0) and np.array_equal(d.frames[-1], noise(2))
+
+
+def test_max_fps_is_above_what_the_spi_display_shows():
+    # 15 MHz SPI, 480x320 at 16 bit: about 6 full frames per second
+    assert 15e6 / (480 * 320 * 16) < fbs.MAX_FPS <= 25
+
+
 def _show(tmp_path, transitions, seed=0, duration=1.0):
     for i, c in enumerate([(255, 0, 0), (0, 255, 0), (0, 0, 255)], 1):
         mk_jpg(tmp_path / f"{i}.jpg", c, size=(80, 40))
@@ -831,7 +856,10 @@ def test_stack_no_black_frame_between_pictures(tmp_path):
     first = next(i for i, f in enumerate(d.frames) if np.array_equal(
         f, fbs.load_image(str(tmp_path / "1.jpg"), (W, H))))
     for f in d.frames[first:]:
-        assert f[H // 2, W // 2].any()  # centre always shows a picture
+        # not the centre pixel alone: the black letterbox bars of these 2:1
+        # test pictures pass the centre while a print is drawn away
+        lit = f.any(axis=2)
+        assert lit.mean() > 0.5  # most of the screen shows a picture
 
 
 def test_next_picture_loaded_before_transition_starts(tmp_path):
