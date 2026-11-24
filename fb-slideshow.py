@@ -1103,6 +1103,14 @@ def open_display(args):
     return display, overlay
 
 
+def exit_code(e):
+    """Exit code of a SystemExit: 0 for a clean stop (SIGTERM, sys.exit()),
+    otherwise the error code, so systemd (Restart=on-failure) restarts."""
+    if e.code is None:
+        return 0
+    return e.code if isinstance(e.code, int) else 1
+
+
 def install_signals():
     """SIGTERM exits cleanly, SIGUSR1 toggles pause. Returns the pause flag."""
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
@@ -1155,8 +1163,10 @@ def main(argv=None):
             refresh=display.refresh if overlay else None, pile=args.pile,
             pile_turn=args.pile_turn,
         )
-    except (KeyboardInterrupt, SystemExit):
+    except KeyboardInterrupt:
         pass
+    except SystemExit as e:  # SIGTERM -> 0 (stopped), anything else = error
+        return exit_code(e)
     finally:
         display.blank()
         display.close()
