@@ -179,7 +179,7 @@ def show_args_argv(value):
     return argv
 
 
-CLOUD_KEYS = {"address", "user", "folder"}
+CLOUD_KEYS = {"address", "user", "folder", "pull"}
 
 
 def cloud_settings(value):
@@ -187,7 +187,9 @@ def cloud_settings(value):
         cloud:
           address: https://cloud.example.org   # public address of the Nextcloud
           user: diashow                        # the account hydra logs in with
-          folder: bilder                       # folder of that account (default)"""
+          folder: bilder                       # folder of that account (default)
+          pull: true                           # fetch the pictures onto the stick
+    pull is checked here, read by cloud_pull()."""
     if value is None:
         return None
     if not isinstance(value, dict):
@@ -195,7 +197,9 @@ def cloud_settings(value):
     unknown = set(map(str, value)) - CLOUD_KEYS
     if unknown:
         raise ConfigError(f"cloud: unknown setting: {', '.join(sorted(unknown))}"
-                          " (address, user, folder; the password is not set here)")
+                          " (address, user, folder, pull; the password is not set here)")
+    if not isinstance(value.get("pull", False), bool):
+        raise ConfigError("cloud: pull must be true or false")
     address, user = value.get("address"), value.get("user")
     folder = value.get("folder", "bilder")
     for name, val in (("address", address), ("user", user), ("folder", folder)):
@@ -214,6 +218,12 @@ def cloud_settings(value):
         raise ConfigError("cloud: folder must be a folder of the user, e.g. bilder")
     url = f"{address}/remote.php/dav/files/{user}/"
     return url, user, "/".join(parts)
+
+
+def cloud_pull(value):
+    """config.yaml 'cloud: pull:' - fetch the pictures onto the stick?
+    Default false: without "pull: true" nothing is fetched."""
+    return isinstance(value, dict) and value.get("pull", False) is True
 
 
 def display_key(args):
@@ -469,8 +479,8 @@ def run(display, config_file, overlay, rng, paused=lambda: False,
 
 def print_cloud(path):
     """--cloud: the cloud settings for ci/diashow-sync.sh, one per line (WebDAV
-    URL, user, folder). Exit 0; 1 without a cloud section or file; 2 when it
-    is broken. Only the cloud section is looked at."""
+    URL, user, folder, pull: "true" or "false"). Exit 0; 1 without a cloud
+    section or file; 2 when it is broken. Only the cloud section is looked at."""
     try:
         with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f.read())
@@ -479,14 +489,15 @@ def print_cloud(path):
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as e:
         print(f"{path}: {e}", file=sys.stderr)
         return 2
+    value = data.get("cloud") if isinstance(data, dict) else None
     try:
-        cloud = cloud_settings(data.get("cloud") if isinstance(data, dict) else None)
+        cloud = cloud_settings(value)
     except ConfigError as e:
         print(f"{path}: {e}", file=sys.stderr)
         return 2
     if cloud is None:
         return 1
-    print("\n".join(cloud))
+    print("\n".join([*cloud, "true" if cloud_pull(value) else "false"]))
     return 0
 
 

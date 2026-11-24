@@ -355,12 +355,15 @@ make movie CONFIG=other.yaml MOVIE=other.mp4 MOVIE_ARGS="--smooth --seed 3"
 
 ## Pictures from Nextcloud
 
-hydra fetches the pictures itself (issue #25): the `.jpg`/`.jpeg` files in
+hydra fetches the pictures itself (issue #25), but only with `pull: true` in
+the `cloud:` section of `config.yaml` (default: off, nothing is fetched): the
+`.jpg`/`.jpeg` files in
 a Nextcloud folder (by default `bilder` of the user `diashow`, an account of
 its own) become an exact copy in `/mnt/stick/bilder`. New
 pictures are fetched, deleted ones removed from the stick; other files there
-stay untouched. Nothing listens on hydra: it pulls over WebDAV whenever it is
-online (any network), with `rclone`.
+stay untouched. One way only: nothing is uploaded, and a picture that is only
+on the stick is deleted there. Nothing listens on hydra: it pulls over WebDAV
+whenever it is online (any network), with `rclone`.
 
 - **When:** a user timer, `diashow-sync.timer`, 2 min after boot and then
   every hour. Offline, a run fails before touching the stick and the next one
@@ -388,10 +391,11 @@ online (any network), with `rclone`.
     address: https://cloud.example.org
     user: diashow
     folder: bilder        # default
+    pull: true            # default false: the timer runs but fetches nothing
   ```
 
-  It wins over `DIASHOW_SRC` in the service; without it, the folder of
-  `DIASHOW_SRC` with the address stored by `make diashow-setup` is used. A
+  Without `config.yaml`, without `cloud:` or without `pull: true` a run
+  reports "pull-down off" and does nothing. A
   broken `cloud:` section stops the sync (nothing done) and is reported by
   `make start` like any other error in the file.
 - **Login:** the app password of `diashow` (revocable in Nextcloud under
